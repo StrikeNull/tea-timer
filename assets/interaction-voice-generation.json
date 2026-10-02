@@ -1,16 +1,16 @@
 [
   {
     "source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice",
-    "speaker": "Vivian",
+    "speaker": "Serena",
     "text": "今天喝什么茶呢？",
-    "instruction": "用甜美活泼的动漫女仆少女语气，带着笑意自然地询问，清晰亲切，语速正常。",
+    "instruction": "用清甜温柔的少女语气，带着笑意自然地询问，清晰亲切，语速正常。",
     "sample_rate": 24000,
-    "duration_seconds": 1.6,
-    "generation_seconds": 8.277006100004655,
+    "duration_seconds": 1.36,
+    "generation_seconds": 3.6856054000090808,
     "device": "AMD Radeon RX 7900 XTX",
-    "peak_allocated_gib": 4.079878807067871,
+    "peak_allocated_gib": 4.0678253173828125,
     "file": "voice-today.wav",
-    "sha256": "6c33fff9a54404bbf26c667df5d69ad7b317f7ee5c588a97781ddfc094947c35"
+    "sha256": "132f421ffb51b37627a6ca106eb4cf64c6f038b89d2e3316d2f3caefd0830892"
   },
   {
     "source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice",

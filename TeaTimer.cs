@@ -261,23 +261,27 @@ namespace TeaTimer
                 now += 250; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-today.png"));
                 now += 3000; form.Pump(); Assert(!form.MainInteractionActive && form.Model.State == TimerState.Ready, "greeting finishes without starting timer");
                 form.Hide(); form.Show(); Application.DoEvents(); Assert(form.InteractionCount == 1, "restoring window does not repeat startup greeting");
-                form.SelectTea(1); Assert(form.InteractionCount == 2 && form.LastInteractionScene == 1, "changing tea plays greeting");
+                form.ClickTeaPicker(); Application.DoEvents();
+                Assert(form.InteractionCount == 2 && form.LastInteractionScene == 1 && prefs.Selected == 0 && form.MainInteractionActive, "opening tea picker plays greeting before any selection");
+                form.CloseTeaPicker(); Assert(form.InteractionCount == 2 && form.MainInteractionActive, "cancelling tea picker retains one greeting");
+                form.SelectTea(1); Assert(form.InteractionCount == 2 && form.MainInteractionActive, "selecting a different tea does not replay or stop greeting");
                 form.SelectTea(1); Assert(form.InteractionCount == 2, "same tea selection does not duplicate greeting");
                 form.ToggleTimer(); Assert(form.InteractionCount == 3 && form.LastInteractionScene == 2 && form.Model.State == TimerState.Running, "start plays brewing interaction and starts countdown");
                 now += 300; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-brewing-interaction.png"));
-                form.SelectTea(0); Assert(form.InteractionCount == 3 && prefs.Selected == 1, "tea cannot change during brew");
+                form.ClickTeaPicker(); form.SelectTea(0); Assert(form.InteractionCount == 3 && prefs.Selected == 1, "disabled tea picker does not play during brew");
                 form.ToggleTimer(); Assert(!form.MainInteractionActive, "pause clears brewing interaction");
                 long remaining = form.Model.RemainingMilliseconds; now += 20000; form.ToggleTimer();
                 Assert(form.InteractionCount == 3 && form.Model.RemainingMilliseconds == remaining, "resume does not replay or change countdown");
                 now += remaining; form.Pump(); Assert(form.HasVisibleAlert && !form.MainInteractionActive, "completion retains original reminder and clears interaction");
-                form.ToggleTimer(); Assert(form.InteractionCount == 4 && form.LastInteractionScene == 2 && form.BrewRound == 2 && form.Model.DurationSeconds == 8, "repeat shares brewing interaction and preserves round increment");
+                form.ClickTeaPicker(); form.CloseTeaPicker(); Assert(form.InteractionCount == 4 && !form.HasVisibleAlert && form.MainInteractionActive, "opening picker dismisses completion before greeting starts");
+                form.ToggleTimer(); Assert(form.InteractionCount == 5 && form.LastInteractionScene == 2 && form.BrewRound == 2 && form.Model.DurationSeconds == 8, "repeat shares brewing interaction and preserves round increment");
                 form.Hide(); Assert(!form.MainInteractionActive && !form.MainHasInteractionClip, "hiding releases interaction animation");
-                form.Show(); Application.DoEvents(); Assert(form.InteractionCount == 4, "restore during brew does not replay interaction");
+                form.Show(); Application.DoEvents(); Assert(form.InteractionCount == 5, "restore during brew does not replay interaction");
                 form.ResetTimer(); prefs.Greetings[2].Enabled = prefs.Brewing[2].Enabled = false;
-                form.SelectTea(0); form.ToggleTimer(); Assert(form.InteractionCount == 4 && !form.MainInteractionActive, "per-role interaction switches suppress playback");
+                form.ClickTeaPicker(); form.CloseTeaPicker(); form.SelectTea(0); form.ToggleTimer(); Assert(form.InteractionCount == 5 && !form.MainInteractionActive, "per-role interaction switches suppress playback");
                 form.ResetTimer();
                 Preferences hidden = new Preferences { MascotKind = 2, ShowMascot = false, AnimateMascot = false };
-                hidden.Times[0] = hidden.Times[1] = 6; form.ApplySettings(hidden); form.SelectTea(1);
+                hidden.Times[0] = hidden.Times[1] = 6; form.ApplySettings(hidden); form.ClickTeaPicker(); form.CloseTeaPicker(); form.SelectTea(1);
                 Assert(form.MainInteractionActive && !form.MainHasInteractionClip, "hidden character respects global setting during interaction");
                 form.ResetTimer(); hidden.ShowMascot = true; hidden.AnimateMascot = false; form.ApplySettings(hidden); form.ToggleTimer();
                 Assert(form.MainInteractionActive && !form.MainHasInteractionClip, "disabled animation keeps static character during interaction");
@@ -322,7 +326,7 @@ namespace TeaTimer
                 custom.Show(); Application.DoEvents(); Assert(custom.MainHasInteractionClip && custom.LastInteractionScene == 1, "saved greeting import plays in main window");
                 custom.ToggleTimer(); Assert(custom.MainHasInteractionClip && custom.LastInteractionScene == 2, "saved brewing import plays in main window"); custom.ResetTimer();
                 File.Delete(restored.Greetings[2].AnimationFile); File.Delete(restored.Brewing[2].VoiceFile);
-                custom.SelectTea(1); Assert(custom.MainHasInteractionClip && custom.LastInteractionScene == 1, "missing imported greeting still animates with built-in fallback");
+                custom.ClickTeaPicker(); custom.CloseTeaPicker(); custom.SelectTea(1); Assert(custom.MainHasInteractionClip && custom.LastInteractionScene == 1, "missing imported greeting still animates with built-in fallback");
                 custom.ToggleTimer(); Assert(custom.MainHasInteractionClip && custom.Model.State == TimerState.Running, "missing imported brewing cannot stop countdown"); custom.ShutdownTest();
             }
             using (MediaSettingsForm editor = new MediaSettingsForm(restored.Reminders, 2, restored.Greetings, restored.Brewing))
@@ -579,7 +583,7 @@ namespace TeaTimer
                     editor.Close();
                 }
                 RunInteractionTests(directory);
-                File.WriteAllText(report, "PASS: timer, round increments, legacy settings, six animations, six voices, startup once, tea-change greeting, start/repeat interactions, pause/resume without replay, completion reminder, hidden/static characters, animation cleanup, scene and role switches, isolated scene edits, scene persistence, GIF/WAV import, managed copies, original-file removal, invalid-file rejection, missing/corrupt-file fallback, scene defaults, DPI layouts and renders.");
+                File.WriteAllText(report, "PASS: timer, round increments, legacy settings, six animations, six voices, startup once, tea-picker click greeting before selection, picker cancellation, no replay or cutoff on selection, disabled picker, start/repeat interactions, pause/resume without replay, completion reminder, hidden/static characters, animation cleanup, scene and role switches, isolated scene edits, scene persistence, GIF/WAV import, managed copies, original-file removal, invalid-file rejection, missing/corrupt-file fallback, scene defaults, DPI layouts and renders.");
             }
             catch (Exception e) { File.WriteAllText(report, "FAIL: " + e); Environment.ExitCode = 1; }
         }
