@@ -7,7 +7,7 @@ if not exist "%compiler%" (
     exit /b 1
 )
 pushd "%~dp0"
-"%compiler%" /nologo /target:winexe /optimize+ /platform:anycpu /codepage:65001 /win32manifest:app.manifest /win32icon:tea.ico /out:TeaTimer.exe /resource:assets\tea-maid.png,TeaTimer.TeaMaid /resource:assets\gpt-maid.png,TeaTimer.GptMaid /resource:assets\gpt-dragon.png,TeaTimer.GptDragon /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Xml.dll /reference:System.Core.dll TeaTimer.cs CompactUi.cs
+"%compiler%" /nologo /target:winexe /optimize+ /platform:anycpu /codepage:65001 /win32manifest:app.manifest /win32icon:tea.ico /out:TeaTimer.exe /resource:assets\tea-maid.png,TeaTimer.TeaMaid /resource:assets\gpt-maid.png,TeaTimer.GptMaid /resource:assets\gpt-dragon.png,TeaTimer.GptDragon /resource:assets\ready-maid.gif,TeaTimer.ReadyMaid /resource:assets\ready-gpt.gif,TeaTimer.ReadyGpt /resource:assets\ready-dragon.gif,TeaTimer.ReadyDragon /resource:assets\tea-ready.wav,TeaTimer.ReadyVoice /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Xml.dll /reference:System.Core.dll TeaTimer.cs CompactUi.cs ReminderMedia.cs
 if errorlevel 1 (
     popd
     exit /b 1

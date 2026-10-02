@@ -1,0 +1,51 @@
+{
+  "source": "Local ComfyUI MiniMax H3",
+  "comfyuiVersion": "0.38.2",
+  "gpu": "AMD Radeon RX 7900 XTX",
+  "model": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+  "textEncoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+  "vae": "minimax_h3_video_vae_fp16.safetensors",
+  "sampler": "res_multistep",
+  "scheduler": "simple",
+  "steps": 20,
+  "seed": 2026100201,
+  "sourceFps": 24,
+  "gifExport": "28 frames, transparent background, edge spill removal",
+  "generationSessions": "Each character was generated in a fresh local backend session.",
+  "workflows": "workflows/ready-{role}.api.json",
+  "clips": [
+    {
+      "role": "maid",
+      "file": "ready-maid.gif",
+      "promptId": "680cf856-55b9-4f3f-a9bc-c76928b102a4",
+      "sourceFrames": 56,
+      "gifFrames": 28,
+      "durationMilliseconds": 2330,
+      "width": 384,
+      "height": 384,
+      "sha256": "026902F8FB6D41A4333B43047AB441B6A194513A0E1F2A6C97DF926B8310C161"
+    },
+    {
+      "role": "gpt",
+      "file": "ready-gpt.gif",
+      "promptId": "4f9c4a19-485c-4f01-8368-64c9f4b2f85a",
+      "sourceFrames": 56,
+      "gifFrames": 28,
+      "durationMilliseconds": 2330,
+      "width": 384,
+      "height": 384,
+      "sha256": "479907CCD343F68A705C93719C501B1E4C16D10CF50245865D9F5B4F1B967709"
+    },
+    {
+      "role": "dragon",
+      "file": "ready-dragon.gif",
+      "promptId": "414ca790-77b3-4aca-8fc1-17fc7c09a8c6",
+      "sourceFrames": 56,
+      "gifFrames": 28,
+      "durationMilliseconds": 2330,
+      "width": 384,
+      "height": 384,
+      "sha256": "C705134C22E93972368006F3E94BF4C757DA6E03C897C142C63C97F21D02AD12"
+    }
+  ]
+}

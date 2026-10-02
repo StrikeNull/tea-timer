@@ -1,0 +1,16 @@
+{
+  "model": "Qwen3-TTS-12Hz-1.7B-CustomVoice",
+  "speaker": "Serena",
+  "text": "茶泡好了，记得出汤哦。",
+  "instruct": "用清甜温柔、活泼的少女语气提醒，语速正常，自然亲切。",
+  "sampleRate": 24000,
+  "durationSeconds": 1.92,
+  "synthesisSeconds": 10.347360400002799,
+  "gpuName": "AMD Radeon RX 7900 XTX",
+  "parameterDevices": [
+    "cuda:0"
+  ],
+  "peakAllocatedGiB": 4.095951557159424,
+  "torchVersion": "2.9.1+rocm7.2.1",
+  "file": "tea-ready.wav"
+}

@@ -73,6 +73,7 @@ namespace TeaTimer
         public int[] Times = new int[] { 120, 180, 150, 120, 240, 240 };
         public int[] RoundIncrements = new int[6];
         public bool Sound = true;
+        public bool VoiceReminder = true;
         public bool OnTop = false;
         public bool ShowMascot = true;
         public bool AnimateMascot = true;
@@ -196,7 +197,8 @@ namespace TeaTimer
     internal sealed class AlertForm : Form
     {
         internal readonly ReminderMascot Mascot;
-        public AlertForm(string tea, Icon icon, Color accent = default(Color), int mascotKind = 0, bool showMascot = true, bool animateMascot = true)
+        private readonly ReminderSpeech speech;
+        public AlertForm(string tea, Icon icon, Color accent = default(Color), int mascotKind = 0, bool showMascot = true, bool animateMascot = true, bool voiceReminder = false)
         {
             SuspendLayout();
             if (accent.IsEmpty) accent = Style.Green;
@@ -220,7 +222,10 @@ namespace TeaTimer
                 child.Bounds = new Rectangle((int)Math.Round(b.X * scale), (int)Math.Round(b.Y * scale), (int)Math.Round(b.Width * scale), (int)Math.Round(b.Height * scale));
             }
             ResumeLayout(false);
+            if (voiceReminder) speech = new ReminderSpeech();
         }
+        protected override void OnShown(EventArgs e) { base.OnShown(e); if (speech != null) speech.Play(); }
+        protected override void Dispose(bool disposing) { if (disposing && speech != null) speech.Dispose(); base.Dispose(disposing); }
     }
 
     internal static class Program
@@ -281,11 +286,13 @@ namespace TeaTimer
                         settings.SetTime(0, 0); Assert(!settings.SaveChanges(), "settings reject zero");
                         settings.SetTime(0, 67); settings.SetTime(1, 89);
                         settings.SetIncrement(0, 15); settings.SetIncrement(1, 10);
+                        settings.ChooseVoiceReminder(false);
                         settings.ChooseMascot(1);
                         Assert(settings.SaveChanges() && prefs.Times[0] == 120, "configuration edits are isolated until save");
                         Assert(prefs.RoundIncrements[0] == 0, "increment edits are isolated until save");
                         form.ApplySettings(settings.Result); Assert(form.Model.DurationSeconds == 67 && prefs.Times[1] == 89, "apply per-tea times");
                         Assert(prefs.RoundIncrements[0] == 15 && prefs.RoundIncrements[1] == 10, "apply per-tea increments");
+                        Assert(!prefs.VoiceReminder, "voice reminder setting applies");
                         Assert(prefs.MascotKind == 1, "choose GPT mascot");
                         form.CapturePreview(Path.Combine(directory, "preview-gpt.png"));
                         settings.Close();
@@ -323,7 +330,7 @@ namespace TeaTimer
                     form.RememberWindowSize(); form.CapturePreview(Path.Combine(directory, "preview-resized.png"));
                     string settingsPath = Path.Combine(directory, "settings-test.xml");
                     Assert(prefs.Save(settingsPath), "write configuration"); Preferences restored = Preferences.Load(settingsPath);
-                    Assert(restored.Times[0] == 40 && restored.Times[1] == 89 && restored.Selected == 1 && restored.WindowWidth == prefs.WindowWidth && restored.WindowHeight == prefs.WindowHeight && restored.ShowMascot == prefs.ShowMascot && restored.AnimateMascot == prefs.AnimateMascot && restored.MascotKind == 2, "configuration and window-size persistence");
+                    Assert(restored.Times[0] == 40 && restored.Times[1] == 89 && restored.Selected == 1 && restored.WindowWidth == prefs.WindowWidth && restored.WindowHeight == prefs.WindowHeight && restored.ShowMascot == prefs.ShowMascot && restored.AnimateMascot == prefs.AnimateMascot && restored.MascotKind == 2 && restored.VoiceReminder == prefs.VoiceReminder, "configuration and window-size persistence");
                     using (TeaForm reopened = new TeaForm(restored, delegate { return now; }, true))
                     {
                         reopened.Show(); Application.DoEvents();
@@ -381,13 +388,32 @@ namespace TeaTimer
                 Preferences legacy = Preferences.Load(legacyPath);
                 Assert(legacy.Times[0] == 60 && legacy.OnTop && legacy.WindowWidth == 280 && legacy.WindowHeight == 236, "old configuration migrates without losing times");
                 Assert(legacy.RoundIncrements.Length == 6 && legacy.RoundIncrements[0] == 0, "legacy settings default to no round increase");
+                Assert(legacy.VoiceReminder, "legacy settings enable voice option");
+                using (ReminderSpeech speech = new ReminderSpeech()) Assert(speech.IsLoaded, "embedded local TTS WAV loads for playback");
                 for (int role = 0; role < MascotCatalog.Names.Length; role++)
                 {
+                    using (ReminderClip clip = new ReminderClip(role))
+                    {
+                        Assert(clip.FrameCount >= 20 && clip.DurationMilliseconds >= 2000 && clip.DurationMilliseconds <= 3000, "each character has a 2-3 second animated clip");
+                        Assert(clip.FrameAt(0) == 0 && clip.FrameAt(clip.DurationMilliseconds + 1) == clip.FrameCount - 1, "short animation holds final frame after completion");
+                        clip.SelectFrame(clip.FrameCount / 2);
+                        using (Bitmap frame = new Bitmap(clip.Image)) frame.Save(Path.Combine(directory, "clip-middle-" + role + ".png"));
+                    }
                     using (AlertForm alert = new AlertForm("花草茶", SystemIcons.Information, Tea.All[5].Accent, role))
                     {
+                        Assert(alert.Mascot.HasVideoClip, "reminder loads selected video clip");
                         alert.Show(); Application.DoEvents();
                         foreach (Control child in alert.Controls)
                             Assert(child.Right <= alert.ClientSize.Width && child.Bottom <= alert.ClientSize.Height, "reminder layout fits at current DPI");
+                        if (role == 0)
+                        {
+                            DateTime until = DateTime.UtcNow.AddMilliseconds(3000);
+                            while (alert.Mascot.AnimationRunning && DateTime.UtcNow < until)
+                            {
+                                Application.DoEvents(); System.Threading.Thread.Sleep(20);
+                            }
+                            Assert(!alert.Mascot.AnimationRunning, "reminder animation stops after one playback");
+                        }
                         Style.CaptureForm(alert, Path.Combine(directory, "preview-alert-" + role + ".png")); alert.Close();
                     }
                 }
