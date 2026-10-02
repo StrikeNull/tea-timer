@@ -61,5 +61,6 @@ https://www.harney.com/products/pu-erh
 源码与验证
 TeaTimer.cs 和 CompactUi.cs 为程序源码，app.manifest 为 Windows 配置。
 在 PowerShell 中执行 build.ps1 可重新生成 EXE。
+如果系统禁用 PowerShell 脚本，可双击 build.cmd，生成 TeaTimer.exe。
 执行「一盏茶.exe --self-test verification」可进行计时与界面验证，
 verification\test-results.txt 会保存结果，PNG 文件为界面预览。
