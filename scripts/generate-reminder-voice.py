@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--model", type=Path, default=Path(r"G:\codex\TK\models\qwen3-tts-1.7b-customvoice"))
 parser.add_argument("--speaker", default="Serena")
 parser.add_argument("--text", default="茶泡好了，记得出汤哦。")
+parser.add_argument("--pack", action="store_true", help="Generate three additional voices with one model load.")
 args = parser.parse_args()
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
@@ -28,22 +29,30 @@ if not torch.cuda.is_available():
     raise SystemExit("TK's Qwen TTS GPU environment is required.")
 model = Qwen3TTSModel.from_pretrained(str(args.model), device_map="cuda:0", dtype=torch.float16,
     attn_implementation="sdpa", local_files_only=True)
-started = time.perf_counter()
-torch.cuda.reset_peak_memory_stats()
-instruction = "用清甜温柔、活泼的少女语气提醒，语速正常，自然亲切。"
-with torch.inference_mode():
-    waves, rate = model.generate_custom_voice(text=args.text, language="Chinese", speaker=args.speaker,
-        instruct=instruction, max_new_tokens=128)
-torch.cuda.synchronize()
-wave = waves[0]
-if not len(wave) or not np.isfinite(wave).all():
-    raise SystemExit("TTS returned invalid audio.")
-output = ROOT / "assets" / "tea-ready.wav"
-sf.write(output, wave, rate, subtype="PCM_16")
-report = {"source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice", "speaker": args.speaker, "text": args.text,
-    "instruction": instruction, "sample_rate": rate, "duration_seconds": len(wave) / rate,
-    "generation_seconds": time.perf_counter() - started, "device": torch.cuda.get_device_name(0),
-    "peak_allocated_gib": torch.cuda.max_memory_allocated() / 1024**3, "file": output.name}
+presets = [
+    ("voice-cheerful.wav", "Vivian", "主人，茶泡好啦，请享用。", "用甜美活泼的动漫女仆少女语气，带着笑意，清晰自然，语速正常。"),
+    ("voice-soft.wav", "Serena", "茶香正好，记得及时出汤哦。", "用温柔舒缓的少女语气轻声提醒，自然亲切，语速正常，不要拖长尾音。"),
+    ("voice-playful.wav", "Vivian", "叮咚，茶好啦，快来喝茶吧。", "用俏皮可爱的少女语气，明亮轻快，有一点开心的小雀跃，语速正常。"),
+] if args.pack else [("tea-ready.wav", args.speaker, args.text, "用清甜温柔、活泼的少女语气提醒，语速正常，自然亲切。")]
+reports = []
+for filename, speaker, text, instruction in presets:
+    started = time.perf_counter()
+    torch.cuda.reset_peak_memory_stats()
+    with torch.inference_mode():
+        waves, rate = model.generate_custom_voice(text=text, language="Chinese", speaker=speaker,
+            instruct=instruction, max_new_tokens=128)
+    torch.cuda.synchronize()
+    wave = waves[0]
+    if not len(wave) or not np.isfinite(wave).all():
+        raise SystemExit("TTS returned invalid audio.")
+    output = ROOT / "assets" / filename
+    sf.write(output, wave, rate, subtype="PCM_16")
+    report = {"source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice", "speaker": speaker, "text": text,
+        "instruction": instruction, "sample_rate": rate, "duration_seconds": len(wave) / rate,
+        "generation_seconds": time.perf_counter() - started, "device": torch.cuda.get_device_name(0),
+        "peak_allocated_gib": torch.cuda.max_memory_allocated() / 1024**3, "file": output.name}
+    reports.append(report)
+    print(json.dumps(report, ensure_ascii=False), flush=True)
 (ROOT / "verification-media").mkdir(exist_ok=True)
-(ROOT / "verification-media" / "tts-generation.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-print(json.dumps(report, ensure_ascii=False))
+name = "tts-pack-generation.json" if args.pack else "tts-generation.json"
+(ROOT / "verification-media" / name).write_text(json.dumps(reports if args.pack else reports[0], ensure_ascii=False, indent=2), encoding="utf-8")

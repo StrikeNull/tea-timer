@@ -10,10 +10,12 @@ from PIL import Image, ImageDraw, ImageFilter
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument("role", choices=["maid", "gpt", "dragon"])
+parser.add_argument("--variant", choices=["ready", "extra"], default="ready")
 parser.add_argument("--server", default="http://127.0.0.1:8189")
 parser.add_argument("--output-dir", type=Path, default=Path(r"G:\Comfy-Desktop\ComfyUI-Shared\output"))
 args = parser.parse_args()
-job = json.loads((ROOT / "verification-media" / ("job-" + args.role + ".json")).read_text())
+key = args.role if args.variant == "ready" else "extra-" + args.role
+job = json.loads((ROOT / "verification-media" / ("job-" + key + ".json")).read_text())
 with request.urlopen(args.server + "/history/" + job["prompt_id"], timeout=20) as response:
     history = json.load(response)
 if job["prompt_id"] not in history:
@@ -23,6 +25,7 @@ if result["status"]["status_str"] != "success":
     messages = [m[1].get("exception_message", "") for m in result["status"]["messages"] if m[0] == "execution_error"]
     raise SystemExit("ComfyUI generation failed: " + " ".join(messages))
 sources = result["outputs"]["16"]["images"]
+(ROOT / "verification-media" / ("frames-" + key + ".json")).write_text(json.dumps({"prompt_id": job["prompt_id"], "images": sources}, indent=2), encoding="utf-8")
 indices = np.linspace(0, len(sources) - 1, 28).round().astype(int)
 frames, masks = [], []
 for index in indices:
@@ -51,7 +54,7 @@ for col, frame in enumerate(frames[::4]):
     rgba = frame.convert("RGBA")
     rgba.putalpha(Image.fromarray((~masks[col * 4] * 255).astype(np.uint8)))
     contact.paste(rgba, (col * 384, 0), rgba)
-contact.save(ROOT / "verification-media" / ("contact-" + args.role + ".png"))
+contact.save(ROOT / "verification-media" / ("contact-" + key + ".png"))
 quantized = contact.quantize(colors=255, method=Image.Quantize.MEDIANCUT)
 palette = Image.new("P", (1, 1))
 palette.putpalette([0, 255, 0] + quantized.getpalette()[:765])
@@ -66,7 +69,7 @@ for frame, mask in zip(frames, masks):
     gif_frames.append(indexed)
 duration = round(len(sources) / 24 * 100) * 10
 delays = [round((i + 1) * duration / 28 / 10) * 10 - round(i * duration / 28 / 10) * 10 for i in range(28)]
-output = ROOT / "assets" / ("ready-" + args.role + ".gif")
+output = ROOT / "assets" / (args.variant + "-" + args.role + ".gif")
 gif_frames[0].save(output, save_all=True, append_images=gif_frames[1:], duration=delays,
     loop=0, transparency=0, disposal=2, optimize=False)
 with Image.open(output) as check:
@@ -74,9 +77,9 @@ with Image.open(output) as check:
     actual_frame_count = check.n_frames
     actual_duration = sum(check.seek(i) or check.info["duration"] for i in range(check.n_frames))
     assert 2000 <= actual_duration <= 3000
-report = {"role": args.role, "prompt_id": job["prompt_id"], "source_frames": len(sources),
+report = {"role": args.role, "variant": args.variant, "prompt_id": job["prompt_id"], "source_frames": len(sources),
     "gif_frames": actual_frame_count, "duration_ms": actual_duration, "bytes": output.stat().st_size,
     "width": frames[0].width, "height": frames[0].height,
     "source": "Local ComfyUI MiniMax H3", "file": output.name}
-(ROOT / "verification-media" / ("export-" + args.role + ".json")).write_text(json.dumps(report, indent=2), encoding="utf-8")
+(ROOT / "verification-media" / ("export-" + key + ".json")).write_text(json.dumps(report, indent=2), encoding="utf-8")
 print(json.dumps(report))
