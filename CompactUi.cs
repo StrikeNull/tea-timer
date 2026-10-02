@@ -111,7 +111,7 @@ namespace TeaTimer
         {
             Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
             float scale = g.DpiY / 96f;
-            float size = Math.Min(Width, Height) - 8 * scale;
+            float size = Math.Min(Width, Height) - 4 * scale;
             artwork.Draw(g, new RectangleF((Width - size) / 2, (Height - size) / 2, size, size),
                 scale, Kind, TimerState.Finished, accent, animation.Enabled, Native.GetTickCount64() / 1000.0);
         }
@@ -128,6 +128,8 @@ namespace TeaTimer
         public Tea Tea;
         public bool ShowMascot = true, AnimateMascot = true;
         public int MascotKind;
+        public int BrewRound = 1;
+        public bool ShowRound;
         public Func<long> Clock;
         private readonly MascotArtwork artwork = new MascotArtwork();
         public ClockPanel()
@@ -143,22 +145,24 @@ namespace TeaTimer
             using (Brush brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
             int seconds = Countdown.RemainingSeconds;
             string time = (seconds / 60).ToString("00") + ":" + (seconds % 60).ToString("00");
-            float mascotSize = Math.Min(Height * .84f, 136 * scale);
-            float textWidth = ShowMascot ? Width - mascotSize - 14 * scale : Width;
-            float fontSize = Math.Min(78 * scale, Math.Min(textWidth * .26f, Height * .40f));
+            float mascotSize = Math.Min(Height - 12 * scale, Math.Min(Width * .55f, Width - 112 * scale));
+            float textWidth = ShowMascot ? Width - mascotSize - 8 * scale : Width;
+            float fontSize = Math.Min(78 * scale, Math.Min(textWidth * .26f, Height * (ShowRound ? .34f : .40f)));
+            if (ShowRound) Style.Text(g, "第 " + BrewRound + " 轮", 8 * scale, FontStyle.Regular, Tea.Accent,
+                new RectangleF(0, 3 * scale, textWidth, 18 * scale), StringAlignment.Center);
             using (Font font = new Font("Segoe UI", fontSize, FontStyle.Regular, GraphicsUnit.Pixel))
             using (Brush brush = new SolidBrush(Style.Blend(Tea.Accent, Color.Black, .55f))) using (StringFormat sf = new StringFormat())
             {
                 sf.Alignment = StringAlignment.Center; sf.LineAlignment = StringAlignment.Center;
-                g.DrawString(time, font, brush, new RectangleF(0, Height * .04f, textWidth, Height * .62f), sf);
+                g.DrawString(time, font, brush, new RectangleF(0, Height * (ShowRound ? .12f : .04f), textWidth, Height * (ShowRound ? .50f : .62f)), sf);
             }
-            string state = Countdown.State == TimerState.Running ? "正在泡茶" : Countdown.State == TimerState.Paused ? "已暂停" : Countdown.State == TimerState.Finished ? "茶泡好了，请及时出汤" : "点击开始泡茶";
+            string state = Countdown.State == TimerState.Running ? "正在泡茶" : Countdown.State == TimerState.Paused ? "已暂停" : Countdown.State == TimerState.Finished ? "茶泡好了，请出汤" : "点击开始泡茶";
             Style.Text(g, state, 9 * scale, FontStyle.Regular, Tea.Accent,
                 new RectangleF(0, Height * .66f, textWidth, 22 * scale), StringAlignment.Center);
-            if (ShowMascot) artwork.Draw(g, new RectangleF(Width - mascotSize - 8 * scale, (Height - mascotSize) / 2 - 3 * scale, mascotSize, mascotSize),
+            if (ShowMascot) artwork.Draw(g, new RectangleF(Width - mascotSize - 4 * scale, (Height - mascotSize) / 2 - 2 * scale, mascotSize, mascotSize),
                 scale, MascotKind, Countdown.State, Tea.Accent, AnimateMascot, Clock == null ? 0 : Clock() / 1000.0);
             float progress = Math.Max(0, Math.Min(1, 1f - (float)Countdown.RemainingMilliseconds / (Countdown.DurationSeconds * 1000f)));
-            RectangleF track = new RectangleF(14 * scale, Height - 12 * scale, Width - 28 * scale, 3 * scale);
+            RectangleF track = new RectangleF(14 * scale, Height - 12 * scale, textWidth - 28 * scale, 3 * scale);
             using (Brush brush = new SolidBrush(ColorTranslator.FromHtml("#E9EEE5"))) g.FillRectangle(brush, track);
             if (progress > 0) using (Brush brush = new SolidBrush(Tea.Accent))
                 g.FillRectangle(brush, track.X, track.Y, track.Width * progress, track.Height);
@@ -176,10 +180,12 @@ namespace TeaTimer
         private readonly System.Windows.Forms.Timer timer;
         private AlertForm alert;
         private bool exiting;
+        private int brewRound = 1;
         private readonly float uiScale;
         internal int CompletionCount { get; private set; }
         internal bool SilentTest, TestNotifications;
         internal Countdown Model { get { return countdown; } }
+        internal int BrewRound { get { return brewRound; } }
         internal AlertForm CurrentAlert { get { return alert; } }
         internal bool HasVisibleAlert { get { return alert != null && alert.Visible && alert.TopMost; } }
         internal TeaForm(Preferences prefs, Func<long> now, bool silentTest = false)
@@ -236,7 +242,7 @@ namespace TeaTimer
         private void LayoutControls()
         {
             if (clockPanel == null || start == null) return;
-            int inset = Px(12), gap = Px(8), configWidth = Px(58), rowHeight = Px(32), buttonHeight = Px(40);
+            int inset = Px(10), gap = Px(6), configWidth = Px(58), rowHeight = Px(30), buttonHeight = Px(36);
             teaPicker.SetBounds(inset, inset + Px(2), Math.Max(1, ClientSize.Width - inset * 2 - configWidth - gap), rowHeight);
             configure.SetBounds(ClientSize.Width - inset - configWidth, inset, configWidth, rowHeight);
             int bottom = ClientSize.Height - inset - buttonHeight, clockTop = inset + rowHeight + gap;
@@ -260,7 +266,7 @@ namespace TeaTimer
             if (IsBusy || index < 0 || index >= Tea.All.Length) return;
             DismissAlert(); preferences.Selected = index;
             teaPicker.Text = Tea.All[index].Name;
-            clockPanel.Tea = Tea.All[index]; countdown.Reset(preferences.Times[index]); UpdateState(); SavePreferences();
+            brewRound = 1; clockPanel.Tea = Tea.All[index]; countdown.Reset(RoundDuration()); UpdateState(); SavePreferences();
             ApplyTheme();
         }
         private void ApplyTheme()
@@ -275,7 +281,7 @@ namespace TeaTimer
         {
             if (duration < 1 || duration > 5999) throw new ArgumentOutOfRangeException("duration");
             if (IsBusy) return;
-            DismissAlert(); preferences.Times[preferences.Selected] = duration; countdown.Reset(duration); UpdateState(); SavePreferences();
+            DismissAlert(); brewRound = 1; preferences.Times[preferences.Selected] = duration; countdown.Reset(duration); UpdateState(); SavePreferences();
         }
         private void ShowConfiguration()
         {
@@ -285,6 +291,7 @@ namespace TeaTimer
         internal void ApplySettings(Preferences result)
         {
             preferences.Times = (int[])result.Times.Clone(); preferences.Sound = result.Sound; preferences.OnTop = result.OnTop;
+            preferences.RoundIncrements = (int[])result.RoundIncrements.Clone();
             preferences.ShowMascot = result.ShowMascot; preferences.AnimateMascot = result.AnimateMascot;
             preferences.MascotKind = result.MascotKind;
             clockPanel.ShowMascot = preferences.ShowMascot; clockPanel.AnimateMascot = preferences.AnimateMascot;
@@ -292,7 +299,7 @@ namespace TeaTimer
             TopMost = preferences.OnTop;
             // A running or paused brew keeps its original deadline. New durations
             // apply to the next brew, including repeating after completion.
-            if (!IsBusy) { DismissAlert(); countdown.Reset(preferences.Times[preferences.Selected]); }
+            if (!IsBusy) { DismissAlert(); if (countdown.State == TimerState.Ready) countdown.Reset(RoundDuration()); }
             UpdateState(); SavePreferences();
         }
         internal void ToggleTimer()
@@ -301,13 +308,16 @@ namespace TeaTimer
             else
             {
                 DismissAlert();
-                if (countdown.State != TimerState.Paused) countdown.Reset(preferences.Times[preferences.Selected]);
+                if (countdown.State == TimerState.Finished && brewRound < int.MaxValue) brewRound++;
+                if (countdown.State != TimerState.Paused) countdown.Reset(RoundDuration());
                 countdown.Start();
             }
             UpdateState();
         }
         internal void ResetTimer()
-        { DismissAlert(); countdown.Reset(preferences.Times[preferences.Selected]); UpdateState(); }
+        { DismissAlert(); brewRound = 1; countdown.Reset(RoundDuration()); UpdateState(); }
+        private int RoundDuration()
+        { return (int)Math.Min(5999L, preferences.Times[preferences.Selected] + (long)(brewRound - 1) * preferences.RoundIncrements[preferences.Selected]); }
         internal void Pump()
         {
             if (countdown.Tick()) Completed(); clockPanel.Invalidate();
@@ -316,6 +326,7 @@ namespace TeaTimer
         private void UpdateState()
         {
             teaPicker.Enabled = !IsBusy;
+            clockPanel.BrewRound = brewRound; clockPanel.ShowRound = preferences.RoundIncrements[preferences.Selected] > 0;
             start.Text = countdown.State == TimerState.Running ? "暂停" : countdown.State == TimerState.Paused ? "继续" : countdown.State == TimerState.Finished ? "再泡一杯" : "开始泡茶";
             tray.Text = "一盏茶 · " + (countdown.State == TimerState.Paused ? "已暂停" : "泡茶计时"); clockPanel.Invalidate();
         }
@@ -340,6 +351,7 @@ namespace TeaTimer
     {
         private readonly Preferences original;
         private readonly NumericUpDown[] minutes = new NumericUpDown[6], seconds = new NumericUpDown[6];
+        private readonly NumericUpDown[] increments = new NumericUpDown[6];
         private readonly CheckBox sound, onTop, showMascot, animateMascot;
         private readonly TeaPickerButton mascotPicker;
         private readonly ContextMenuStrip mascotMenu;
@@ -352,19 +364,21 @@ namespace TeaTimer
             Text = "配置 · 一盏茶"; BackColor = Style.Background; ForeColor = Style.Ink; Font = Style.Font(9, FontStyle.Regular);
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
             ShowInTaskbar = false; StartPosition = FormStartPosition.CenterParent; TopMost = preferences.OnTop;
-            AutoScaleMode = AutoScaleMode.None; ClientSize = new Size(370, 508);
+            AutoScaleMode = AutoScaleMode.None; ClientSize = new Size(454, 508);
             AddLabel("泡茶配置", 20, 14, 330, 36, 16, FontStyle.Bold);
             AddLabel("每种茶的时间分别保存，下次打开仍保留。", 20, 50, 330, 26, 8.5f, FontStyle.Regular);
             AddLabel("茶类", 22, 82, 90, 25, 9, FontStyle.Bold);
             AddLabel("分钟", 126, 82, 70, 25, 9, FontStyle.Bold);
             AddLabel("秒钟", 210, 82, 70, 25, 9, FontStyle.Bold);
+            AddLabel("每轮 +秒", 294, 82, 80, 25, 9, FontStyle.Bold);
             for (int i = 0; i < Tea.All.Length; i++)
             {
                 int index = i, y = 112 + i * 30;
                 AddLabel(Tea.All[i].Name, 22, y, 92, 27, 9, FontStyle.Regular);
                 minutes[i] = MakeNumber(126, y, 99, preferences.Times[i] / 60, Tea.All[i].Name + "分钟");
                 seconds[i] = MakeNumber(210, y, 59, preferences.Times[i] % 60, Tea.All[i].Name + "秒钟");
-                ActionButton recommended = new ActionButton("推荐", false); recommended.SetBounds(294, y, 56, 27);
+                increments[i] = MakeNumber(294, y, 5999, preferences.RoundIncrements[i], Tea.All[i].Name + "每轮增加秒数");
+                ActionButton recommended = new ActionButton("推荐", false); recommended.SetBounds(378, y, 56, 27);
                 recommended.Font = Style.Font(8, FontStyle.Regular);
                 recommended.Click += delegate { SetTime(index, Tea.All[index].Seconds); }; Controls.Add(recommended);
             }
@@ -376,7 +390,7 @@ namespace TeaTimer
             showMascot.CheckedChanged += delegate { animateMascot.Enabled = showMascot.Checked; };
             Controls.Add(showMascot); Controls.Add(animateMascot);
             AddLabel("形象", 22, 367, 48, 25, 9, FontStyle.Bold);
-            mascotPicker = new TeaPickerButton { Accent = Style.Green, AccessibleName = "选择泡茶娘形象" }; mascotPicker.SetBounds(82, 362, 268, 32); Controls.Add(mascotPicker);
+            mascotPicker = new TeaPickerButton { Accent = Style.Green, AccessibleName = "选择泡茶娘形象" }; mascotPicker.SetBounds(82, 362, 352, 32); Controls.Add(mascotPicker);
             mascotMenu = new ContextMenuStrip();
             for (int i = 0; i < MascotCatalog.Names.Length; i++)
             {
@@ -384,11 +398,11 @@ namespace TeaTimer
             }
             mascotPicker.Click += delegate { mascotMenu.Show(mascotPicker, new Point(0, mascotPicker.Height)); };
             ChooseMascot(preferences.MascotKind); Disposed += delegate { mascotMenu.Dispose(); };
-            AddLabel("杯泡参考，盖碗 / 功夫泡请自定义短时间。", 22, 398, 330, 25, 8, FontStyle.Regular);
-            status = AddLabel(busy ? "正在计时：时间修改在下一次泡茶生效。" : "时间范围：1 秒至 99 分 59 秒。", 22, 422, 330, 27, 8, FontStyle.Regular);
-            ActionButton save = new ActionButton("保存", true); save.SetBounds(20, 462, 214, 34);
+            AddLabel("每轮 +秒：0 不增加，重置 / 换茶回第一轮。", 22, 398, 414, 25, 8, FontStyle.Regular);
+            status = AddLabel(busy ? "正在计时：时间修改在下一次泡茶生效。" : "每轮时间上限：99 分 59 秒。", 22, 422, 414, 27, 8, FontStyle.Regular);
+            ActionButton save = new ActionButton("保存", true); save.SetBounds(20, 462, 298, 34);
             save.Click += delegate { if (SaveChanges()) { DialogResult = DialogResult.OK; Close(); } }; Controls.Add(save);
-            ActionButton cancel = new ActionButton("取消", false); cancel.SetBounds(246, 462, 104, 34); cancel.DialogResult = DialogResult.Cancel;
+            ActionButton cancel = new ActionButton("取消", false); cancel.SetBounds(330, 462, 104, 34); cancel.DialogResult = DialogResult.Cancel;
             cancel.Click += delegate { Close(); }; Controls.Add(cancel); AcceptButton = save; CancelButton = cancel;
             float scale; using (Graphics graphics = CreateGraphics()) scale = graphics.DpiY / 96f;
             foreach (Control control in Controls)
@@ -397,7 +411,7 @@ namespace TeaTimer
                 if (control.AutoSize) control.Location = new Point((int)Math.Round(bounds.X * scale), (int)Math.Round(bounds.Y * scale));
                 else control.SetBounds((int)Math.Round(bounds.X * scale), (int)Math.Round(bounds.Y * scale), (int)Math.Round(bounds.Width * scale), (int)Math.Round(bounds.Height * scale));
             }
-            ClientSize = new Size((int)Math.Round(370 * scale), (int)Math.Round(508 * scale));
+            ClientSize = new Size((int)Math.Round(454 * scale), (int)Math.Round(508 * scale));
             ResumeLayout(false);
         }
         private Label AddLabel(string text, int x, int y, int width, int height, float size, FontStyle fontStyle)
@@ -411,6 +425,7 @@ namespace TeaTimer
             input.SetBounds(x, y, 68, 27); Controls.Add(input); return input;
         }
         internal void SetTime(int index, int duration) { minutes[index].Value = duration / 60; seconds[index].Value = duration % 60; }
+        internal void SetIncrement(int index, int increment) { increments[index].Value = increment; }
         internal void ChooseMascot(int kind)
         {
             selectedMascot = Math.Max(0, Math.Min(MascotCatalog.Names.Length - 1, kind));
@@ -420,12 +435,14 @@ namespace TeaTimer
         internal bool SaveChanges()
         {
             int[] times = new int[Tea.All.Length];
+            int[] increases = new int[Tea.All.Length];
             for (int i = 0; i < times.Length; i++)
             {
                 times[i] = (int)minutes[i].Value * 60 + (int)seconds[i].Value;
+                increases[i] = (int)increments[i].Value;
                 if (times[i] == 0) { status.Text = Tea.All[i].Name + "的时间需要大于 0 秒。"; status.ForeColor = Color.Firebrick; minutes[i].Focus(); return false; }
             }
-            Result = new Preferences { Selected = original.Selected, Times = times, Sound = sound.Checked, OnTop = onTop.Checked, ShowMascot = showMascot.Checked, AnimateMascot = animateMascot.Checked, MascotKind = selectedMascot, WindowWidth = original.WindowWidth, WindowHeight = original.WindowHeight };
+            Result = new Preferences { Selected = original.Selected, Times = times, RoundIncrements = increases, Sound = sound.Checked, OnTop = onTop.Checked, ShowMascot = showMascot.Checked, AnimateMascot = animateMascot.Checked, MascotKind = selectedMascot, WindowWidth = original.WindowWidth, WindowHeight = original.WindowHeight };
             return true;
         }
         internal void CapturePreview(string path) { Style.CaptureForm(this, path); }

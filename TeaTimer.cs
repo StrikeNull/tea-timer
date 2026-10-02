@@ -71,6 +71,7 @@ namespace TeaTimer
     {
         public int Selected;
         public int[] Times = new int[] { 120, 180, 150, 120, 240, 240 };
+        public int[] RoundIncrements = new int[6];
         public bool Sound = true;
         public bool OnTop = false;
         public bool ShowMascot = true;
@@ -88,7 +89,9 @@ namespace TeaTimer
                     Preferences p = (Preferences)new XmlSerializer(typeof(Preferences)).Deserialize(stream);
                     if (p.Selected < 0 || p.Selected >= Tea.All.Length) p.Selected = 0;
                     if (p.Times == null || p.Times.Length != Tea.All.Length) p.Times = new Preferences().Times;
+                    if (p.RoundIncrements == null || p.RoundIncrements.Length != Tea.All.Length) p.RoundIncrements = new int[Tea.All.Length];
                     for (int i = 0; i < p.Times.Length; i++) if (p.Times[i] < 1 || p.Times[i] > 5999) p.Times[i] = Tea.All[i].Seconds;
+                    for (int i = 0; i < p.RoundIncrements.Length; i++) p.RoundIncrements[i] = Math.Max(0, Math.Min(5999, p.RoundIncrements[i]));
                     p.WindowWidth = Math.Max(260, Math.Min(1280, p.WindowWidth));
                     p.WindowHeight = Math.Max(208, Math.Min(960, p.WindowHeight));
                     if (p.MascotKind < 0 || p.MascotKind >= MascotCatalog.Names.Length) p.MascotKind = 0;
@@ -200,15 +203,15 @@ namespace TeaTimer
             Text = "茶泡好了 · 一盏茶"; Icon = icon; TopMost = true; ShowInTaskbar = true;
             AutoScaleMode = AutoScaleMode.None;
             float scale; using (Graphics g = CreateGraphics()) scale = g.DpiY / 96f;
-            ClientSize = new Size((int)Math.Round((showMascot ? 300 : 280) * scale), (int)Math.Round(166 * scale)); BackColor = Style.Blend(accent, Color.White, .06f); StartPosition = FormStartPosition.CenterScreen;
+            ClientSize = new Size((int)Math.Round((showMascot ? 320 : 280) * scale), (int)Math.Round(166 * scale)); BackColor = Style.Blend(accent, Color.White, .06f); StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
-            Label title = new Label { Text = "茶泡好了", Font = Style.Font(18, FontStyle.Bold), ForeColor = accent, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(120, 20, 168, 40) : new Rectangle(20, 16, 240, 40) };
-            Label body = new Label { Text = tea + (showMascot ? "已到时间，\n请及时出汤。" : "已到时间，请及时出汤。"), Font = Style.Font(9, FontStyle.Regular), ForeColor = Style.Muted, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(120, 62, 168, 40) : new Rectangle(14, 60, 252, 32) };
-            ActionButton ok = new ActionButton("知道了，喝茶去", true) { Accent = accent, Bounds = new Rectangle(showMascot ? 50 : 40, 116, 200, 36), DialogResult = DialogResult.OK };
+            Label title = new Label { Text = "茶泡好了", Font = Style.Font(18, FontStyle.Bold), ForeColor = accent, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(154, 16, 158, 40) : new Rectangle(20, 16, 240, 40) };
+            Label body = new Label { Text = tea + (showMascot ? "已到时间，\n请及时出汤。" : "已到时间，请及时出汤。"), Font = Style.Font(9, FontStyle.Regular), ForeColor = Style.Muted, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(154, 58, 158, 40) : new Rectangle(14, 60, 252, 32) };
+            ActionButton ok = new ActionButton("知道了，喝茶去", true) { Accent = accent, Bounds = showMascot ? new Rectangle(164, 116, 144, 36) : new Rectangle(40, 116, 200, 36), DialogResult = DialogResult.OK };
             ok.Click += delegate { Close(); }; Controls.Add(title); Controls.Add(body); Controls.Add(ok); AcceptButton = ok; CancelButton = ok;
             if (showMascot)
             {
-                Mascot = new ReminderMascot(mascotKind, accent, animateMascot) { Bounds = new Rectangle(6, 2, 112, 112) };
+                Mascot = new ReminderMascot(mascotKind, accent, animateMascot) { Bounds = new Rectangle(4, 4, 150, 154) };
                 Controls.Add(Mascot);
             }
             foreach (Control child in Controls)
@@ -277,9 +280,12 @@ namespace TeaTimer
                         settings.Show(); Application.DoEvents(); settings.CapturePreview(Path.Combine(directory, "preview-settings.png"));
                         settings.SetTime(0, 0); Assert(!settings.SaveChanges(), "settings reject zero");
                         settings.SetTime(0, 67); settings.SetTime(1, 89);
+                        settings.SetIncrement(0, 15); settings.SetIncrement(1, 10);
                         settings.ChooseMascot(1);
                         Assert(settings.SaveChanges() && prefs.Times[0] == 120, "configuration edits are isolated until save");
+                        Assert(prefs.RoundIncrements[0] == 0, "increment edits are isolated until save");
                         form.ApplySettings(settings.Result); Assert(form.Model.DurationSeconds == 67 && prefs.Times[1] == 89, "apply per-tea times");
+                        Assert(prefs.RoundIncrements[0] == 15 && prefs.RoundIncrements[1] == 10, "apply per-tea increments");
                         Assert(prefs.MascotKind == 1, "choose GPT mascot");
                         form.CapturePreview(Path.Combine(directory, "preview-gpt.png"));
                         settings.Close();
@@ -325,10 +331,56 @@ namespace TeaTimer
                     }
                     form.ShutdownTest();
                 }
+                Preferences roundPrefs = new Preferences { MascotKind = 2 };
+                roundPrefs.Times[0] = 30; roundPrefs.RoundIncrements[0] = 10;
+                roundPrefs.Times[1] = 2; roundPrefs.RoundIncrements[1] = 5;
+                using (TeaForm rounds = new TeaForm(roundPrefs, delegate { return now; }, true))
+                {
+                    rounds.Show(); Application.DoEvents();
+                    Assert(rounds.BrewRound == 1 && rounds.Model.DurationSeconds == 30, "first round uses base duration");
+                    rounds.ToggleTimer(); now += 30000; rounds.Pump(); rounds.ToggleTimer();
+                    Assert(rounds.BrewRound == 2 && rounds.Model.DurationSeconds == 40, "second round adds increment");
+                    now += 5000; rounds.ToggleTimer(); long held = rounds.Model.RemainingMilliseconds;
+                    now += 100000; rounds.ToggleTimer();
+                    Assert(rounds.BrewRound == 2 && rounds.Model.RemainingMilliseconds == held, "pause and resume do not add a round");
+                    now += held; rounds.Pump(); rounds.ToggleTimer();
+                    Assert(rounds.BrewRound == 3 && rounds.Model.DurationSeconds == 50, "third round accumulates increment");
+                    rounds.CapturePreview(Path.Combine(directory, "preview-round-three.png"));
+                    rounds.ResetTimer(); Assert(rounds.BrewRound == 1 && rounds.Model.DurationSeconds == 30, "reset restores first round");
+                    rounds.SelectTea(1); Assert(rounds.BrewRound == 1 && rounds.Model.DurationSeconds == 2, "switch tea restores its base duration");
+                    rounds.ToggleTimer(); now += 2000; rounds.Pump(); rounds.ToggleTimer();
+                    Assert(rounds.BrewRound == 2 && rounds.Model.DurationSeconds == 7, "each tea uses its own increment"); rounds.ResetTimer();
+                    rounds.ToggleTimer();
+                    Preferences updated = new Preferences(); updated.Times = (int[])roundPrefs.Times.Clone(); updated.RoundIncrements = (int[])roundPrefs.RoundIncrements.Clone();
+                    updated.Times[1] = 3; updated.RoundIncrements[1] = 7; rounds.ApplySettings(updated);
+                    Assert(rounds.BrewRound == 1 && rounds.Model.DurationSeconds == 2 && rounds.Model.RemainingSeconds == 2, "changing increments preserves active round deadline");
+                    now += 2000; rounds.Pump(); updated.RoundIncrements[1] = 8; rounds.ApplySettings(updated);
+                    Assert(rounds.Model.State == TimerState.Finished && rounds.BrewRound == 1, "settings after completion preserve repeat sequence");
+                    rounds.ToggleTimer(); Assert(rounds.BrewRound == 2 && rounds.Model.DurationSeconds == 11, "next round uses updated base and increment");
+                    rounds.ResetTimer(); Assert(rounds.Model.DurationSeconds == 3 && rounds.BrewRound == 1, "reset uses new base duration");
+                    updated.Times[1] = 5990; updated.RoundIncrements[1] = 20; rounds.ApplySettings(updated);
+                    rounds.ToggleTimer(); now += 5990000; rounds.Pump(); rounds.ToggleTimer();
+                    Assert(rounds.Model.DurationSeconds == 5999 && rounds.BrewRound == 2, "increased round clamps at maximum duration");
+                    now += 5999000; rounds.Pump(); rounds.ToggleTimer();
+                    Assert(rounds.Model.DurationSeconds == 5999 && rounds.BrewRound == 3, "subsequent rounds stay at maximum duration");
+                    string roundPath = Path.Combine(directory, "round-settings.xml"); Assert(roundPrefs.Save(roundPath), "save per-tea increments");
+                    Preferences savedRounds = Preferences.Load(roundPath);
+                    Assert(savedRounds.RoundIncrements[0] == 10 && savedRounds.RoundIncrements[1] == 20, "per-tea increment persistence");
+                    rounds.ShutdownTest();
+                    using (TeaForm reopenedRounds = new TeaForm(savedRounds, delegate { return now; }, true))
+                    {
+                        Assert(reopenedRounds.BrewRound == 1 && reopenedRounds.Model.DurationSeconds == 5990, "reopening starts a new first round with saved increments");
+                        reopenedRounds.Show(); reopenedRounds.Size = reopenedRounds.MinimumSize;
+                        Preferences hiddenRounds = new Preferences { Times = (int[])savedRounds.Times.Clone(), RoundIncrements = (int[])savedRounds.RoundIncrements.Clone(), ShowMascot = false };
+                        reopenedRounds.ApplySettings(hiddenRounds); Application.DoEvents();
+                        reopenedRounds.CapturePreview(Path.Combine(directory, "preview-round-hidden-minimum.png")); reopenedRounds.ShutdownTest();
+                    }
+                }
                 string legacyPath = Path.Combine(directory, "legacy-settings.xml");
                 File.WriteAllText(legacyPath, "<Preferences><Selected>0</Selected><Times><int>60</int><int>180</int><int>150</int><int>120</int><int>240</int><int>240</int></Times><Sound>true</Sound><OnTop>true</OnTop></Preferences>");
                 Preferences legacy = Preferences.Load(legacyPath);
                 Assert(legacy.Times[0] == 60 && legacy.OnTop && legacy.WindowWidth == 280 && legacy.WindowHeight == 236, "old configuration migrates without losing times");
+                Assert(legacy.RoundIncrements.Length == 6 && legacy.RoundIncrements[0] == 0, "legacy settings default to no round increase");
                 for (int role = 0; role < MascotCatalog.Names.Length; role++)
                 {
                     using (AlertForm alert = new AlertForm("花草茶", SystemIcons.Information, Tea.All[5].Accent, role))
@@ -339,7 +391,7 @@ namespace TeaTimer
                         Style.CaptureForm(alert, Path.Combine(directory, "preview-alert-" + role + ".png")); alert.Close();
                     }
                 }
-                File.WriteAllText(report, "PASS: countdown, pause/resume, deadline boundary, single completion, repeat, sleep recovery, zero/max bounds, all 6 presets, UI transitions, alerts, selected reminder roles, static/hidden reminders, animation disposal, reminder DPI layouts, configuration validation, active-timer preservation, resize layouts, persistence/reopening, legacy migration and renders.");
+                File.WriteAllText(report, "PASS: countdown, pause/resume, deadline boundary, single completion, repeat, sleep recovery, zero/max bounds, all 6 presets, per-tea round increases, pause/round boundaries, reset/tea-change round reset, updated increments, maximum round duration, UI transitions, alerts, selected reminder roles, static/hidden reminders, animation disposal, reminder DPI layouts, configuration validation, active-timer preservation, resize layouts, persistence/reopening, legacy migration and renders.");
             }
             catch (Exception e) { File.WriteAllText(report, "FAIL: " + e); Environment.ExitCode = 1; }
         }
