@@ -79,6 +79,8 @@ namespace TeaTimer
         public bool AnimateMascot = true;
         public int MascotKind = 0;
         public ReminderProfile[] Reminders = { new ReminderProfile(), new ReminderProfile(), new ReminderProfile() };
+        public ReminderProfile[] Greetings = MediaCatalog.CopyProfiles(null, 1);
+        public ReminderProfile[] Brewing = MediaCatalog.CopyProfiles(null, 2);
         public int WindowWidth = 280;
         public int WindowHeight = 236;
         public static string FilePath { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YiZhanCha", "settings.xml"); } }
@@ -98,6 +100,8 @@ namespace TeaTimer
                     p.WindowHeight = Math.Max(208, Math.Min(960, p.WindowHeight));
                     if (p.MascotKind < 0 || p.MascotKind >= MascotCatalog.Names.Length) p.MascotKind = 0;
                     p.Reminders = MediaCatalog.CopyProfiles(p.Reminders);
+                    p.Greetings = MediaCatalog.CopyProfiles(p.Greetings, 1);
+                    p.Brewing = MediaCatalog.CopyProfiles(p.Brewing, 2);
                     return p;
                 }
             }
@@ -200,7 +204,7 @@ namespace TeaTimer
     {
         internal readonly ReminderMascot Mascot;
         private readonly ReminderSpeech speech;
-        public AlertForm(string tea, Icon icon, Color accent = default(Color), int mascotKind = 0, bool showMascot = true, bool animateMascot = true, bool voiceReminder = false, ReminderProfile profile = null, bool preview = false)
+        public AlertForm(string tea, Icon icon, Color accent = default(Color), int mascotKind = 0, bool showMascot = true, bool animateMascot = true, bool voiceReminder = false, ReminderProfile profile = null, bool preview = false, int mediaScene = 0)
         {
             SuspendLayout();
             if (accent.IsEmpty) accent = Style.Green;
@@ -215,7 +219,7 @@ namespace TeaTimer
             ok.Click += delegate { Close(); }; Controls.Add(title); Controls.Add(body); Controls.Add(ok); AcceptButton = ok; CancelButton = ok;
             if (showMascot)
             {
-                Mascot = new ReminderMascot(mascotKind, accent, animateMascot, profile) { Bounds = new Rectangle(4, 4, 150, 154) };
+                Mascot = new ReminderMascot(mascotKind, accent, animateMascot, profile, mediaScene) { Bounds = new Rectangle(4, 4, 150, 154) };
                 Controls.Add(Mascot);
             }
             foreach (Control child in Controls)
@@ -224,7 +228,7 @@ namespace TeaTimer
                 child.Bounds = new Rectangle((int)Math.Round(b.X * scale), (int)Math.Round(b.Y * scale), (int)Math.Round(b.Width * scale), (int)Math.Round(b.Height * scale));
             }
             ResumeLayout(false);
-            if (voiceReminder) speech = new ReminderSpeech(profile == null ? 0 : profile.VoiceStyle, profile == null ? null : profile.VoiceFile);
+            if (voiceReminder) speech = new ReminderSpeech(profile == null ? 0 : profile.VoiceStyle, profile == null ? null : profile.VoiceFile, mediaScene);
         }
         protected override void OnShown(EventArgs e) { base.OnShown(e); if (speech != null) speech.Play(); }
         protected override void Dispose(bool disposing) { if (disposing && speech != null) speech.Dispose(); base.Dispose(disposing); }
@@ -245,6 +249,93 @@ namespace TeaTimer
             }
         }
         private static void Assert(bool value, string message) { if (!value) throw new Exception(message); }
+        private static void RunInteractionTests(string directory)
+        {
+            long now = 1000;
+            Preferences prefs = new Preferences { MascotKind = 2 };
+            prefs.Times[0] = prefs.Times[1] = 6; prefs.RoundIncrements[1] = 2;
+            using (TeaForm form = new TeaForm(prefs, delegate { return now; }, true) { TestInteractions = true, TestNotifications = true })
+            {
+                form.Show(); Application.DoEvents();
+                Assert(form.InteractionCount == 1 && form.LastInteractionScene == 1 && form.MainHasInteractionClip, "startup plays greeting in main window once");
+                now += 250; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-today.png"));
+                now += 3000; form.Pump(); Assert(!form.MainInteractionActive && form.Model.State == TimerState.Ready, "greeting finishes without starting timer");
+                form.Hide(); form.Show(); Application.DoEvents(); Assert(form.InteractionCount == 1, "restoring window does not repeat startup greeting");
+                form.SelectTea(1); Assert(form.InteractionCount == 2 && form.LastInteractionScene == 1, "changing tea plays greeting");
+                form.SelectTea(1); Assert(form.InteractionCount == 2, "same tea selection does not duplicate greeting");
+                form.ToggleTimer(); Assert(form.InteractionCount == 3 && form.LastInteractionScene == 2 && form.Model.State == TimerState.Running, "start plays brewing interaction and starts countdown");
+                now += 300; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-brewing-interaction.png"));
+                form.SelectTea(0); Assert(form.InteractionCount == 3 && prefs.Selected == 1, "tea cannot change during brew");
+                form.ToggleTimer(); Assert(!form.MainInteractionActive, "pause clears brewing interaction");
+                long remaining = form.Model.RemainingMilliseconds; now += 20000; form.ToggleTimer();
+                Assert(form.InteractionCount == 3 && form.Model.RemainingMilliseconds == remaining, "resume does not replay or change countdown");
+                now += remaining; form.Pump(); Assert(form.HasVisibleAlert && !form.MainInteractionActive, "completion retains original reminder and clears interaction");
+                form.ToggleTimer(); Assert(form.InteractionCount == 4 && form.LastInteractionScene == 2 && form.BrewRound == 2 && form.Model.DurationSeconds == 8, "repeat shares brewing interaction and preserves round increment");
+                form.Hide(); Assert(!form.MainInteractionActive && !form.MainHasInteractionClip, "hiding releases interaction animation");
+                form.Show(); Application.DoEvents(); Assert(form.InteractionCount == 4, "restore during brew does not replay interaction");
+                form.ResetTimer(); prefs.Greetings[2].Enabled = prefs.Brewing[2].Enabled = false;
+                form.SelectTea(0); form.ToggleTimer(); Assert(form.InteractionCount == 4 && !form.MainInteractionActive, "per-role interaction switches suppress playback");
+                form.ResetTimer();
+                Preferences hidden = new Preferences { MascotKind = 2, ShowMascot = false, AnimateMascot = false };
+                hidden.Times[0] = hidden.Times[1] = 6; form.ApplySettings(hidden); form.SelectTea(1);
+                Assert(form.MainInteractionActive && !form.MainHasInteractionClip, "hidden character respects global setting during interaction");
+                form.ResetTimer(); hidden.ShowMascot = true; hidden.AnimateMascot = false; form.ApplySettings(hidden); form.ToggleTimer();
+                Assert(form.MainInteractionActive && !form.MainHasInteractionClip, "disabled animation keeps static character during interaction");
+                form.ShutdownTest();
+            }
+            using (ReminderSpeech today = new ReminderSpeech(6)) Assert(today.IsLoaded, "today voice loads");
+            using (ReminderSpeech brewing = new ReminderSpeech(7)) Assert(brewing.IsLoaded, "brewing voice loads");
+            string sourceDir = Path.Combine(directory, "interaction-source"); Directory.CreateDirectory(sourceDir);
+            string gif = Path.Combine(sourceDir, "greeting.gif"), wave = Path.Combine(sourceDir, "brewing.wav");
+            using (Stream source = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("TeaTimer.ExtraDragon"))
+            using (FileStream target = File.Create(gif)) source.CopyTo(target);
+            using (Stream source = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("TeaTimer.VoiceBrewing"))
+            using (FileStream target = File.Create(wave)) source.CopyTo(target);
+            Preferences original = new Preferences(); ReminderProfile[] greetings, brews;
+            using (MediaSettingsForm editor = new MediaSettingsForm(original.Reminders, 2, original.Greetings, original.Brewing))
+            {
+                editor.Show(); editor.ChooseScene(1); Application.DoEvents();
+                Assert(editor.SetCustomFile(gif, true) && editor.SetCustomFile(wave, false), "greeting supports both custom imports");
+                editor.CapturePreview(Path.Combine(directory, "preview-greeting-custom.png"));
+                editor.ChooseScene(2); Assert(editor.SetCustomFile(gif, true) && editor.SetCustomFile(wave, false), "brewing supports both custom imports");
+                editor.ChooseRole(1); editor.EnableInteraction(false); editor.ChooseRole(2);
+                Assert(editor.ApplyChanges() && original.Greetings[2].AnimationFile == "" && original.Brewing[1].Enabled, "scene edits remain isolated");
+                greetings = editor.GreetingResult; brews = editor.BrewingResult;
+                Assert(editor.Result[2].AnimationStyle == 0 && greetings[2].VoiceStyle == MediaCatalog.CustomVoice && !brews[1].Enabled, "scenes and roles have independent choices");
+                editor.Close();
+            }
+            string storage = Path.Combine(directory, "interaction-media"); Preferences saved;
+            using (SettingsForm settings = new SettingsForm(original, false, storage))
+            { settings.ChooseInteractionProfiles(greetings, brews); Assert(settings.SaveChanges(), "scene imports save to managed storage"); saved = settings.Result; }
+            string config = Path.Combine(directory, "interaction-settings.xml"); Assert(saved.Save(config), "scene settings save");
+            Preferences restored = Preferences.Load(config);
+            Assert(restored.Greetings[2].AnimationFile.StartsWith(storage) && restored.Brewing[2].VoiceFile.StartsWith(storage)
+                && !restored.Brewing[1].Enabled && restored.Reminders[2].VoiceStyle == 0, "scene selections, switches and old reminders restore independently");
+            File.Delete(gif); File.Delete(wave);
+            using (ReminderClip clip = new ReminderClip(2, restored.Greetings[2].AnimationStyle, restored.Greetings[2].AnimationFile, 1))
+                Assert(clip.FrameCount >= 20, "greeting copy survives original removal");
+            using (ReminderSpeech speech = new ReminderSpeech(restored.Brewing[2].VoiceStyle, restored.Brewing[2].VoiceFile, 2))
+                Assert(speech.IsLoaded, "brewing copy survives original removal");
+            restored.MascotKind = 2;
+            using (TeaForm custom = new TeaForm(restored, delegate { return now; }, true) { TestInteractions = true })
+            {
+                custom.Show(); Application.DoEvents(); Assert(custom.MainHasInteractionClip && custom.LastInteractionScene == 1, "saved greeting import plays in main window");
+                custom.ToggleTimer(); Assert(custom.MainHasInteractionClip && custom.LastInteractionScene == 2, "saved brewing import plays in main window"); custom.ResetTimer();
+                File.Delete(restored.Greetings[2].AnimationFile); File.Delete(restored.Brewing[2].VoiceFile);
+                custom.SelectTea(1); Assert(custom.MainHasInteractionClip && custom.LastInteractionScene == 1, "missing imported greeting still animates with built-in fallback");
+                custom.ToggleTimer(); Assert(custom.MainHasInteractionClip && custom.Model.State == TimerState.Running, "missing imported brewing cannot stop countdown"); custom.ShutdownTest();
+            }
+            using (MediaSettingsForm editor = new MediaSettingsForm(restored.Reminders, 2, restored.Greetings, restored.Brewing))
+            {
+                editor.ChooseScene(1); editor.RestoreDefault(true); editor.RestoreDefault(false);
+                editor.ChooseScene(2); editor.RestoreDefault(true); editor.RestoreDefault(false); Assert(editor.ApplyChanges(), "scene defaults restore");
+                Assert(editor.GreetingResult[2].AnimationStyle == 1 && editor.GreetingResult[2].VoiceStyle == 6 && editor.BrewingResult[2].VoiceStyle == 7, "restore uses correct scene defaults");
+                editor.Show(); editor.ChooseScene(1); Application.DoEvents(); editor.CapturePreview(Path.Combine(directory, "preview-greeting-settings.png"));
+                foreach (Control control in editor.Controls) Assert(control.Right <= editor.ClientSize.Width && control.Bottom <= editor.ClientSize.Height, "scene editor fits current DPI"); editor.Close();
+            }
+            using (ReminderSpeech fallback = new ReminderSpeech(MediaCatalog.CustomVoice, Path.Combine(sourceDir, "missing.wav"), 1))
+                Assert(fallback.IsLoaded && MediaCatalog.DefaultProfile(1).VoiceStyle == 6, "missing greeting voice uses scene fallback");
+        }
         private static void RunTests(string directory)
         {
             Directory.CreateDirectory(directory); string report = Path.Combine(directory, "test-results.txt");
@@ -392,6 +483,7 @@ namespace TeaTimer
                 Assert(legacy.RoundIncrements.Length == 6 && legacy.RoundIncrements[0] == 0, "legacy settings default to no round increase");
                 Assert(legacy.VoiceReminder, "legacy settings enable voice option");
                 Assert(legacy.Reminders.Length == 3 && legacy.Reminders[2].AnimationStyle == 0 && legacy.Reminders[2].VoiceStyle == 0, "legacy settings keep original media defaults");
+                Assert(legacy.Greetings.Length == 3 && legacy.Greetings[2].VoiceStyle == 6 && legacy.Brewing[2].VoiceStyle == 7, "legacy settings acquire appropriate interaction defaults");
                 using (ReminderSpeech speech = new ReminderSpeech()) Assert(speech.IsLoaded, "embedded local TTS WAV loads for playback");
                 for (int role = 0; role < MascotCatalog.Names.Length; role++)
                 {
@@ -486,7 +578,8 @@ namespace TeaTimer
                     foreach (Control child in editor.Controls) Assert(child.Right <= editor.ClientSize.Width && child.Bottom <= editor.ClientSize.Height, "media editor fits current DPI");
                     editor.Close();
                 }
-                File.WriteAllText(report, "PASS: timer, round increments, legacy settings, layout, six embedded animations, four local voices, single animation playback, isolated media edits, per-character selection persistence, GIF/WAV import, managed copies, original-file removal, invalid-file rejection, missing/corrupt-file fallback, restoring defaults, media editor DPI and renders.");
+                RunInteractionTests(directory);
+                File.WriteAllText(report, "PASS: timer, round increments, legacy settings, six animations, six voices, startup once, tea-change greeting, start/repeat interactions, pause/resume without replay, completion reminder, hidden/static characters, animation cleanup, scene and role switches, isolated scene edits, scene persistence, GIF/WAV import, managed copies, original-file removal, invalid-file rejection, missing/corrupt-file fallback, scene defaults, DPI layouts and renders.");
             }
             catch (Exception e) { File.WriteAllText(report, "FAIL: " + e); Environment.ExitCode = 1; }
         }

@@ -8,13 +8,14 @@ namespace TeaTimer
 {
     public sealed class ReminderProfile
     {
+        public bool Enabled = true;
         public int AnimationStyle;
         public int VoiceStyle;
         public string AnimationFile = "";
         public string VoiceFile = "";
         internal ReminderProfile Copy()
         {
-            return new ReminderProfile { AnimationStyle = AnimationStyle, VoiceStyle = VoiceStyle,
+            return new ReminderProfile { Enabled = Enabled, AnimationStyle = AnimationStyle, VoiceStyle = VoiceStyle,
                 AnimationFile = AnimationFile ?? "", VoiceFile = VoiceFile ?? "" };
         }
     }
@@ -23,7 +24,8 @@ namespace TeaTimer
     {
         internal const int CustomAnimation = 3, CustomVoice = 5;
         internal static readonly string[] ExtraActions = { "挥手迎茶", "俏皮眨眼", "摇尾招呼" };
-        internal static readonly string[] VoiceNames = { "清甜出汤", "活泼女仆", "温柔茶香", "俏皮催茶", "随机播放" };
+        internal static readonly string[] SceneNames = { "到时提醒", "启动 / 切换茶", "开始 / 再泡一杯" };
+        internal static readonly string[] VoiceNames = { "清甜出汤", "活泼女仆", "温柔茶香", "俏皮催茶", "随机出汤语音", "自定义 WAV", "今天喝什么茶", "开始泡茶" };
         private static readonly Random random = new Random();
         internal static string AnimationResource(int role, int style)
         {
@@ -36,17 +38,20 @@ namespace TeaTimer
         internal static string VoiceResource(int style)
         {
             if (style == 4) style = random.Next(4);
-            string[] names = { "TeaTimer.ReadyVoice", "TeaTimer.VoiceCheerful", "TeaTimer.VoiceSoft", "TeaTimer.VoicePlayful" };
-            return names[Math.Max(0, Math.Min(3, style))];
+            string[] names = { "TeaTimer.ReadyVoice", "TeaTimer.VoiceCheerful", "TeaTimer.VoiceSoft", "TeaTimer.VoicePlayful",
+                "TeaTimer.ReadyVoice", "TeaTimer.ReadyVoice", "TeaTimer.VoiceToday", "TeaTimer.VoiceBrewing" };
+            return names[Math.Max(0, Math.Min(7, style))];
         }
-        internal static ReminderProfile[] CopyProfiles(ReminderProfile[] profiles)
+        internal static ReminderProfile DefaultProfile(int scene)
+        { return new ReminderProfile { AnimationStyle = scene == 1 ? 1 : 0, VoiceStyle = scene == 1 ? 6 : scene == 2 ? 7 : 0 }; }
+        internal static ReminderProfile[] CopyProfiles(ReminderProfile[] profiles, int scene = 0)
         {
             ReminderProfile[] result = new ReminderProfile[3];
             for (int i = 0; i < result.Length; i++)
             {
-                result[i] = profiles != null && i < profiles.Length && profiles[i] != null ? profiles[i].Copy() : new ReminderProfile();
+                result[i] = profiles != null && i < profiles.Length && profiles[i] != null ? profiles[i].Copy() : DefaultProfile(scene);
                 result[i].AnimationStyle = Math.Max(0, Math.Min(CustomAnimation, result[i].AnimationStyle));
-                result[i].VoiceStyle = Math.Max(0, Math.Min(CustomVoice, result[i].VoiceStyle));
+                result[i].VoiceStyle = Math.Max(0, Math.Min(7, result[i].VoiceStyle));
             }
             return result;
         }
@@ -126,20 +131,20 @@ namespace TeaTimer
             Validate(target, animation);
             return target;
         }
-        internal static ReminderProfile[] Store(ReminderProfile[] profiles, string directory = null)
+        internal static ReminderProfile[] Store(ReminderProfile[] profiles, string directory = null, int scene = 0)
         {
-            ReminderProfile[] result = MediaCatalog.CopyProfiles(profiles);
+            ReminderProfile[] result = MediaCatalog.CopyProfiles(profiles, scene);
             foreach (ReminderProfile profile in result)
             {
                 if (!String.IsNullOrEmpty(profile.AnimationFile))
                 {
                     try { profile.AnimationFile = Import(profile.AnimationFile, true, directory); }
-                    catch (Exception e) { if (!IsMediaError(e) || profile.AnimationStyle == MediaCatalog.CustomAnimation) throw; profile.AnimationFile = ""; }
+                    catch (Exception e) { if (!IsMediaError(e) || (profile.Enabled && profile.AnimationStyle == MediaCatalog.CustomAnimation)) throw; profile.AnimationFile = ""; }
                 }
                 if (!String.IsNullOrEmpty(profile.VoiceFile))
                 {
                     try { profile.VoiceFile = Import(profile.VoiceFile, false, directory); }
-                    catch (Exception e) { if (!IsMediaError(e) || profile.VoiceStyle == MediaCatalog.CustomVoice) throw; profile.VoiceFile = ""; }
+                    catch (Exception e) { if (!IsMediaError(e) || (profile.Enabled && profile.VoiceStyle == MediaCatalog.CustomVoice)) throw; profile.VoiceFile = ""; }
                 }
             }
             return result;

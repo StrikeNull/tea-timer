@@ -1,0 +1,28 @@
+[
+  {
+    "source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    "speaker": "Vivian",
+    "text": "今天喝什么茶呢？",
+    "instruction": "用甜美活泼的动漫女仆少女语气，带着笑意自然地询问，清晰亲切，语速正常。",
+    "sample_rate": 24000,
+    "duration_seconds": 1.6,
+    "generation_seconds": 8.277006100004655,
+    "device": "AMD Radeon RX 7900 XTX",
+    "peak_allocated_gib": 4.079878807067871,
+    "file": "voice-today.wav",
+    "sha256": "6c33fff9a54404bbf26c667df5d69ad7b317f7ee5c588a97781ddfc094947c35"
+  },
+  {
+    "source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    "speaker": "Serena",
+    "text": "开始泡茶啦，稍等一下哦。",
+    "instruction": "用清甜温柔的少女语气，轻快自然地宣布开始泡茶，语速正常，不要拖长尾音。",
+    "sample_rate": 24000,
+    "duration_seconds": 2.4,
+    "generation_seconds": 4.415629399998579,
+    "device": "AMD Radeon RX 7900 XTX",
+    "peak_allocated_gib": 4.120051860809326,
+    "file": "voice-brewing.wav",
+    "sha256": "4c29fd2869f8ee5bac11ca02df30e5d46530fbf9bc78706cc17f72d2d37b3191"
+  }
+]
