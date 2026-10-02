@@ -1,10 +1,12 @@
 泡茶娘素材生成记录
 
-方式：内置 imagegen 工具。两张图都是生成的原创泡茶角色，不是从网上下载的现成 GPT / DeepSeek 角色图，也不是官方吉祥物。
+方式：内置 imagegen 工具。蓝鲸女仆和白发眼镜 GPT 茶娘为生成的原创泡茶角色；GPT 龙娘按用户提供的角色参考图生成。素材均不是直接下载的现成动画。
 
 项目素材：
 assets\tea-maid.png：蓝发鲸鱼女仆，三个状态：待机 / 泡茶 / 完成。
-assets\gpt-maid.png：银白发薄荷绿女仆，戴圆眼镜，三个状态：待机 / 泡茶 / 完成。当前是原创暂用形象，用户提供参考后可替换。
+assets\gpt-maid.png：银白发薄荷绿女仆，戴圆眼镜，三个状态：待机 / 泡茶 / 完成。与参考图版龙娘同时保留，供用户选择。
+assets\gpt-dragon.png：按用户提供的白发紫瞳、龙角龙翼龙尾、绳结发饰参考图生成，三个状态：待机 / 泡茶 / 完成。没有保留参考图的表情包文字。
+GPT 龙娘的完整最终提示词见同目录「龙娘提示词.txt」。
 
 蓝鲸形象的概念参考：蓝发、鲸鱼耳鳍和尾巴、深蓝白女仆装，参考社区形象描述。
 https://github.com/Georgehaoren/DSH-WhaleConsole/blob/main/docs/CHARACTERS.zh-CN.md
