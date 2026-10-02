@@ -14,14 +14,15 @@ namespace TeaTimer
         private int[] frameEnds;
         internal int DurationMilliseconds { get { return frameEnds[frameEnds.Length - 1]; } }
         internal int FrameCount { get { return frameEnds.Length; } }
-        internal ReminderClip(int kind, int style = 0, string file = null)
+        internal ReminderClip(int kind, int style = 0, string file = null, int scene = 0)
         {
             if (style == MediaCatalog.CustomAnimation && !String.IsNullOrEmpty(file))
             {
                 try { Load(MediaLibrary.OpenLocal(file, true)); }
                 catch (Exception e) { if (!MediaLibrary.IsMediaError(e)) throw; }
             }
-            if (Image == null) Load(Assembly.GetExecutingAssembly().GetManifestResourceStream(MediaCatalog.AnimationResource(kind, style)));
+            if (Image == null) Load(Assembly.GetExecutingAssembly().GetManifestResourceStream(MediaCatalog.AnimationResource(kind,
+                style == MediaCatalog.CustomAnimation ? MediaCatalog.DefaultProfile(scene).AnimationStyle : style)));
         }
         internal ReminderClip(string file) { Load(MediaLibrary.OpenLocal(file, true)); }
         private void Load(Stream data)
@@ -64,14 +65,15 @@ namespace TeaTimer
         private SoundPlayer player;
         private bool disposed;
         internal bool IsLoaded { get { return player.IsLoadCompleted; } }
-        internal ReminderSpeech(int style = 0, string file = null)
+        internal ReminderSpeech(int style = 0, string file = null, int scene = 0)
         {
             if (style == MediaCatalog.CustomVoice && !String.IsNullOrEmpty(file))
             {
                 try { Load(MediaLibrary.OpenLocal(file, false)); }
                 catch (Exception e) { if (!MediaLibrary.IsMediaError(e)) throw; disposed = false; }
             }
-            if (player == null) Load(Assembly.GetExecutingAssembly().GetManifestResourceStream(MediaCatalog.VoiceResource(style == MediaCatalog.CustomVoice ? 0 : style)));
+            if (player == null) Load(Assembly.GetExecutingAssembly().GetManifestResourceStream(MediaCatalog.VoiceResource(
+                style == MediaCatalog.CustomVoice ? MediaCatalog.DefaultProfile(scene).VoiceStyle : style)));
         }
         internal ReminderSpeech(string file) { Load(MediaLibrary.OpenLocal(file, false)); }
         private void Load(Stream data)
