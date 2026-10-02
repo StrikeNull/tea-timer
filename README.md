@@ -14,7 +14,8 @@
 - 独立配置页设置时间、提示音、置顶、角色和动画。
 - Q 版蓝鲸女仆、GPT 原创茶娘和参考图版 GPT 龙娘，包含待机、泡茶、完成三种状态。
 - 暂停、继续、重置、再泡一杯；最小化后继续计时。
-- 到时置顶弹窗显示所选泡茶娘的招手和闪光动作，配合系统托盘通知和可关闭的提示音。
+- 到时置顶弹窗显示所选泡茶娘，配合系统托盘通知和可关闭的提示音。
+- 提醒时播放 2～3 秒角色短动画和本地生成的短语音；配置页可关闭语音或试听。
 - 睡眠期间到期，会在唤醒后补发提醒。
 
 ## 使用
@@ -32,6 +33,8 @@
 
 提醒弹窗跟随配置页的角色选择、「显示泡茶娘」和「播放动画」设置。关闭动画会保留静态角色，隐藏角色后仍有文字提醒。
 主窗口和提醒弹窗使用更大的角色展示区域，主窗口调整大小时角色也会随之缩放。
+短动画在弹窗打开时播放一次，结束后停在最后一帧。「提示音」控制全部提醒声音；勾选「语音提醒」播放「茶泡好了，记得出汤哦」，取消后使用原提示音。配置页的「试听」按钮可直接试听短语音。
+动画与语音已提前生成并嵌入 EXE，平时提醒时直接播放，无需启动 ComfyUI、TTS 服务或占用 GPU。
 
 ![泡茶娘提醒](docs/reminder.png)
 
@@ -49,7 +52,7 @@
 ```
 
 编译脚本使用 Windows .NET Framework 自带的 C# 编译器，输出 `一盏茶.exe`。
-源码为 `TeaTimer.cs`、`CompactUi.cs`，图像资源位于 `assets/`。
+源码为 `TeaTimer.cs`、`CompactUi.cs`、`ReminderMedia.cs`，图像、短动画和语音资源位于 `assets/`。
 
 如果系统禁用 PowerShell 脚本，双击 `build.cmd` 也能编译，输出 `TeaTimer.exe`，无需修改系统执行策略。
 
@@ -69,6 +72,24 @@ Get-Content '.\verification\test-results.txt'
 完整提示词与来源说明见 [素材生成记录](assets/生成记录.txt) 和 [龙娘提示词](assets/龙娘提示词.txt)。
 
 ![GPT 龙娘](docs/gpt-dragon.png)
+
+## 本地生成提醒素材
+
+提醒短动画由本机 ComfyUI 0.38.2 的 MiniMax H3 图生视频工作流生成，角色图提供首帧，使用 20 步基础模型。输出为 384×384、24 FPS、56 帧，约 2.33 秒，抠除纯绿背景后转换为透明 GIF，供 WinForms 直接播放。完整 API 工作流位于 `workflows/`，生成与导出脚本位于 `scripts/`。
+
+短语音使用 TK 已有的 Qwen3-TTS 1.7B CustomVoice GPU 环境和 Serena 声线。生成记录见 `assets/voice-generation.json`。模型与 Python 环境不随程序打包。
+
+复现时先启动本地 ComfyUI，并保证工作流中的模型名称已安装；脚本默认服务地址为 `http://127.0.0.1:8189`，输入与输出目录为当前电脑的 ComfyUI 共享目录，可通过参数更改。本机使用默认动态显存管理，无需修改 ComfyUI 安装文件。
+
+```powershell
+python scripts/generate-reminder-animation.py maid
+# 等待 ComfyUI 生成完毕后导出；其他角色使用 gpt 或 dragon。
+python scripts/export-reminder-animation.py maid
+# 使用 TK 的现有环境生成短语音。
+& G:\codex\TK\.tools\qwen-tts-gpu-venv\Scripts\python.exe scripts/generate-reminder-voice.py
+```
+
+生成与导出脚本需要 Pillow、NumPy；重新编译后即可更新程序内嵌的提醒素材。
 
 ## 泡茶时间参考
 
