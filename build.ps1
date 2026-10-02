@@ -7,7 +7,7 @@ if (-not (Test-Path -LiteralPath $compilerPath)) {
 if (-not (Test-Path -LiteralPath $compilerPath)) { throw '未找到 Windows .NET Framework 编译器。' }
 Push-Location $PSScriptRoot
 try {
-    & $compilerPath /nologo /target:winexe /optimize+ /platform:anycpu /win32manifest:app.manifest /win32icon:tea.ico "/out:$OutputPath" /resource:assets\tea-maid.png,TeaTimer.TeaMaid /resource:assets\gpt-maid.png,TeaTimer.GptMaid /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Xml.dll /reference:System.Core.dll TeaTimer.cs CompactUi.cs
+    & $compilerPath /nologo /target:winexe /optimize+ /platform:anycpu /win32manifest:app.manifest /win32icon:tea.ico "/out:$OutputPath" /resource:assets\tea-maid.png,TeaTimer.TeaMaid /resource:assets\gpt-maid.png,TeaTimer.GptMaid /resource:assets\gpt-dragon.png,TeaTimer.GptDragon /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Xml.dll /reference:System.Core.dll TeaTimer.cs CompactUi.cs
     if ($LASTEXITCODE -ne 0) { throw '编译失败。' }
     Write-Output (Join-Path $PSScriptRoot $OutputPath)
 } finally { Pop-Location }

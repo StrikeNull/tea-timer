@@ -91,7 +91,7 @@ namespace TeaTimer
                     for (int i = 0; i < p.Times.Length; i++) if (p.Times[i] < 1 || p.Times[i] > 5999) p.Times[i] = Tea.All[i].Seconds;
                     p.WindowWidth = Math.Max(260, Math.Min(1280, p.WindowWidth));
                     p.WindowHeight = Math.Max(208, Math.Min(960, p.WindowHeight));
-                    if (p.MascotKind < 0 || p.MascotKind > 1) p.MascotKind = 0;
+                    if (p.MascotKind < 0 || p.MascotKind >= MascotCatalog.Names.Length) p.MascotKind = 0;
                     return p;
                 }
             }
@@ -275,13 +275,21 @@ namespace TeaTimer
                     Assert(form.Model.State == TimerState.Running && form.Model.DurationSeconds == 67 && form.Model.RemainingMilliseconds == remaining, "configuration preserves active countdown");
                     form.ResetTimer(); Assert(form.Model.DurationSeconds == 40, "next brew uses new duration");
                     form.SelectTea(1); form.CapturePreview(Path.Combine(directory, "preview-red.png"));
+                    using (SettingsForm dragonSettings = new SettingsForm(prefs, false))
+                    {
+                        dragonSettings.ChooseMascot(2); Assert(dragonSettings.SaveChanges(), "dragon role settings");
+                        form.ApplySettings(dragonSettings.Result); Assert(prefs.MascotKind == 2, "select dragon mascot");
+                    }
+                    form.CapturePreview(Path.Combine(directory, "preview-dragon.png"));
+                    form.ToggleTimer(); now += 300; form.CapturePreview(Path.Combine(directory, "preview-dragon-brewing.png"));
+                    now += 89000; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-dragon-ready.png")); form.ResetTimer();
                     form.Size = form.MinimumSize; Application.DoEvents(); form.CapturePreview(Path.Combine(directory, "preview-minimum.png"));
                     Assert(form.Controls[form.Controls.Count - 1].Bottom <= form.ClientSize.Height, "minimum-size buttons fit");
                     form.ClientSize = new Size(660, 440); Application.DoEvents();
                     form.RememberWindowSize(); form.CapturePreview(Path.Combine(directory, "preview-resized.png"));
                     string settingsPath = Path.Combine(directory, "settings-test.xml");
                     Assert(prefs.Save(settingsPath), "write configuration"); Preferences restored = Preferences.Load(settingsPath);
-                    Assert(restored.Times[0] == 40 && restored.Times[1] == 89 && restored.Selected == 1 && restored.WindowWidth == prefs.WindowWidth && restored.WindowHeight == prefs.WindowHeight && restored.ShowMascot == prefs.ShowMascot && restored.AnimateMascot == prefs.AnimateMascot && restored.MascotKind == 1, "configuration and window-size persistence");
+                    Assert(restored.Times[0] == 40 && restored.Times[1] == 89 && restored.Selected == 1 && restored.WindowWidth == prefs.WindowWidth && restored.WindowHeight == prefs.WindowHeight && restored.ShowMascot == prefs.ShowMascot && restored.AnimateMascot == prefs.AnimateMascot && restored.MascotKind == 2, "configuration and window-size persistence");
                     using (TeaForm reopened = new TeaForm(restored, delegate { return now; }, true))
                     {
                         reopened.Show(); Application.DoEvents();

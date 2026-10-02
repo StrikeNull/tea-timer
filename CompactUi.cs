@@ -8,6 +8,12 @@ using System.Windows.Forms;
 
 namespace TeaTimer
 {
+    internal static class MascotCatalog
+    {
+        public static readonly string[] Names = { "蓝鲸女仆", "GPT 茶娘（原创）", "GPT 龙娘" };
+        public static readonly string[] Resources = { "TeaTimer.TeaMaid", "TeaTimer.GptMaid", "TeaTimer.GptDragon" };
+    }
+
     internal sealed class TeaPickerButton : Button
     {
         public Color Accent;
@@ -40,11 +46,11 @@ namespace TeaTimer
         public bool ShowMascot = true, AnimateMascot = true;
         public int MascotKind;
         public Func<long> Clock;
-        private readonly Bitmap[] mascots = new Bitmap[2];
+        private readonly Bitmap[] mascots = new Bitmap[MascotCatalog.Names.Length];
         public ClockPanel()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
-            string[] resources = { "TeaTimer.TeaMaid", "TeaTimer.GptMaid" };
+            string[] resources = MascotCatalog.Resources;
             for (int i = 0; i < resources.Length; i++)
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resources[i]))
                 using (Image source = Image.FromStream(stream)) mascots[i] = new Bitmap(source);
@@ -84,7 +90,7 @@ namespace TeaTimer
             float bob = moving ? (float)Math.Sin(phase * 2.4) * 2 * scale : 0;
             float tilt = moving ? (float)Math.Sin(phase * 1.8) * (Countdown.State == TimerState.Finished ? 2 : .7f) : 0;
             int frame = Countdown.State == TimerState.Running ? 1 : Countdown.State == TimerState.Finished ? 2 : 0;
-            Bitmap mascot = mascots[MascotKind == 1 ? 1 : 0];
+            Bitmap mascot = mascots[Math.Max(0, Math.Min(mascots.Length - 1, MascotKind))];
             float drawWidth = size * mascot.Width / 3f / mascot.Height;
             float x = Width - size - 8 * scale, y = (Height - size) / 2 - 3 * scale + bob;
             GraphicsState saved = g.Save();
@@ -293,7 +299,9 @@ namespace TeaTimer
         private readonly Preferences original;
         private readonly NumericUpDown[] minutes = new NumericUpDown[6], seconds = new NumericUpDown[6];
         private readonly CheckBox sound, onTop, showMascot, animateMascot;
-        private readonly RadioButton whale, gpt;
+        private readonly TeaPickerButton mascotPicker;
+        private readonly ContextMenuStrip mascotMenu;
+        private int selectedMascot;
         private readonly Label status;
         internal Preferences Result { get; private set; }
         internal SettingsForm(Preferences preferences, bool busy)
@@ -326,9 +334,14 @@ namespace TeaTimer
             showMascot.CheckedChanged += delegate { animateMascot.Enabled = showMascot.Checked; };
             Controls.Add(showMascot); Controls.Add(animateMascot);
             AddLabel("形象", 22, 367, 48, 25, 9, FontStyle.Bold);
-            whale = new RadioButton { Text = "蓝鲸女仆", Checked = preferences.MascotKind == 0, AutoSize = true, Location = new Point(82, 369) };
-            gpt = new RadioButton { Text = "GPT 茶娘（原创）", Checked = preferences.MascotKind == 1, AutoSize = true, Location = new Point(216, 369) };
-            Controls.Add(whale); Controls.Add(gpt);
+            mascotPicker = new TeaPickerButton { Accent = Style.Green, AccessibleName = "选择泡茶娘形象" }; mascotPicker.SetBounds(82, 362, 268, 32); Controls.Add(mascotPicker);
+            mascotMenu = new ContextMenuStrip();
+            for (int i = 0; i < MascotCatalog.Names.Length; i++)
+            {
+                int index = i; mascotMenu.Items.Add(MascotCatalog.Names[i], null, delegate { ChooseMascot(index); });
+            }
+            mascotPicker.Click += delegate { mascotMenu.Show(mascotPicker, new Point(0, mascotPicker.Height)); };
+            ChooseMascot(preferences.MascotKind); Disposed += delegate { mascotMenu.Dispose(); };
             AddLabel("杯泡参考，盖碗 / 功夫泡请自定义短时间。", 22, 398, 330, 25, 8, FontStyle.Regular);
             status = AddLabel(busy ? "正在计时：时间修改在下一次泡茶生效。" : "时间范围：1 秒至 99 分 59 秒。", 22, 422, 330, 27, 8, FontStyle.Regular);
             ActionButton save = new ActionButton("保存", true); save.SetBounds(20, 462, 214, 34);
@@ -356,7 +369,12 @@ namespace TeaTimer
             input.SetBounds(x, y, 68, 27); Controls.Add(input); return input;
         }
         internal void SetTime(int index, int duration) { minutes[index].Value = duration / 60; seconds[index].Value = duration % 60; }
-        internal void ChooseMascot(int kind) { if (kind == 1) gpt.Checked = true; else whale.Checked = true; }
+        internal void ChooseMascot(int kind)
+        {
+            selectedMascot = Math.Max(0, Math.Min(MascotCatalog.Names.Length - 1, kind));
+            mascotPicker.Text = MascotCatalog.Names[selectedMascot];
+            for (int i = 0; i < mascotMenu.Items.Count; i++) ((ToolStripMenuItem)mascotMenu.Items[i]).Checked = i == selectedMascot;
+        }
         internal bool SaveChanges()
         {
             int[] times = new int[Tea.All.Length];
@@ -365,7 +383,7 @@ namespace TeaTimer
                 times[i] = (int)minutes[i].Value * 60 + (int)seconds[i].Value;
                 if (times[i] == 0) { status.Text = Tea.All[i].Name + "的时间需要大于 0 秒。"; status.ForeColor = Color.Firebrick; minutes[i].Focus(); return false; }
             }
-            Result = new Preferences { Selected = original.Selected, Times = times, Sound = sound.Checked, OnTop = onTop.Checked, ShowMascot = showMascot.Checked, AnimateMascot = animateMascot.Checked, MascotKind = gpt.Checked ? 1 : 0, WindowWidth = original.WindowWidth, WindowHeight = original.WindowHeight };
+            Result = new Preferences { Selected = original.Selected, Times = times, Sound = sound.Checked, OnTop = onTop.Checked, ShowMascot = showMascot.Checked, AnimateMascot = animateMascot.Checked, MascotKind = selectedMascot, WindowWidth = original.WindowWidth, WindowHeight = original.WindowHeight };
             return true;
         }
         internal void CapturePreview(string path) { Style.CaptureForm(this, path); }
