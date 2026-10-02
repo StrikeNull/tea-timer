@@ -12,5 +12,11 @@
   ],
   "peakAllocatedGiB": 4.095951557159424,
   "torchVersion": "2.9.1+rocm7.2.1",
-  "file": "tea-ready.wav"
+  "file": "tea-ready.wav",
+  "synthesizedSha256": "8a592e10b767f141263c5bc401afe55ca45751ceaae97364980c836f3b477b1f",
+  "sha256": "b2265be7b3ce61bb4ccc8069dcecdb66c4aa6c8edbd0171c9345b936f5e0e8ad",
+  "postprocessing": {
+    "loudnessLufs": -20.000003939177205,
+    "truePeakDb": -2.395894927720204
+  }
 }

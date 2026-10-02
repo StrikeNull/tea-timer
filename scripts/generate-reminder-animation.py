@@ -20,21 +20,26 @@ descriptions = {
     "gpt": "silver-haired chibi tea maid with round glasses, mint green and white frilled dress and hair ribbon",
     "dragon": "white-haired lavender-eyed chibi dragon girl with white horns, lavender wings and tail, white dress and knot ornaments",
 }
-atlas = Image.open(ROOT / "assets" / atlas_names[args.role]).convert("RGBA")
-cell = atlas.width // 3
-sprite = atlas.crop((0, 0, cell, atlas.height))
-sprite_size = 304 if args.variant == "extra" and args.role == "dragon" else 340
+if args.variant == "extra":
+    sprite = Image.open(ROOT / "assets" / ("idle-" + args.role + ".png")).convert("RGBA")
+else:
+    atlas = Image.open(ROOT / "assets" / atlas_names[args.role]).convert("RGBA")
+    cell = atlas.width // 3
+    sprite = atlas.crop((0, 0, cell, atlas.height))
+sprite_size = 340
 sprite.thumbnail((sprite_size, sprite_size), Image.Resampling.LANCZOS)
 canvas = Image.new("RGB", (384, 384), (0, 255, 0))
 canvas.paste(sprite, ((384 - sprite.width) // 2, (384 - sprite.height) // 2), sprite)
 canvas.save(args.input_dir / ("tea_" + args.variant + "_" + args.role + "_first.png"))
 
 actions = {
-    "maid": "She smiles warmly, blinks once, keeps her teacup steady in one hand, and gives two small friendly waves with the other hand. Her whale tail makes a small happy wag.",
-    "gpt": "She gives a playful wink and a tiny friendly head tilt, smiles, and brings the teacup a little closer to her chest with both hands. Keep the cup stable and hand motion small.",
-    "dragon": "She smiles softly and blinks once, holding her teacup steady with both hands. Her small lavender wings flutter gently once. Her dragon tail stays curled closely beside her body and its tip gives a tiny happy wiggle. Keep the original tail length and wing size. Keep a wide green margin around her whole silhouette throughout; never stretch her tail or wings towards the frame edges.",
+    "maid": "She smiles warmly and blinks once. She lifts only her left empty hand, gives one small gentle wave near shoulder height, then lowers it back to the exact relaxed waist pose of the first frame. Her other hand stays relaxed at her waist throughout. Keep her whale tail still.",
+    "gpt": "She gives a gentle friendly smile and blinks once. She lifts only her left empty hand, gives one small gentle wave near shoulder height, then lowers it back to the exact relaxed waist pose of the first frame. Her other hand stays relaxed at her waist throughout. Keep her glasses and head steady.",
+    "dragon": "She smiles softly and blinks once. She lifts only her left empty hand, gives one small gentle wave near shoulder height, then lowers it back to the exact relaxed waist pose of the first frame. Her other hand stays relaxed at her waist throughout. Her wings and curled tail remain still and close to her body.",
 }
 action = actions[args.role] if args.variant == "extra" else "She gives a gentle happy smile, blinks once, gives a small friendly nod, and slightly raises her teacup with both hands to remind the viewer that tea is ready. Keep the cup stable and hand motion small."
+if args.variant == "extra":
+    action += " Both hands remain completely empty. Exactly two arms and two anatomically coherent hands. No cup, saucer, teapot, food or floating objects may appear in any frame. Complete the wave before the final half-second; hold the original neutral first-frame pose at the end."
 
 prompt = ("A fixed camera, full body 2D anime sticker animation of the exact " + descriptions[args.role] +
     " from the first reference frame. Keep her face, clothes, proportions and accessories unchanged. " +
@@ -55,7 +60,7 @@ graph = {
     "8": node("MiniMaxLowVRAMAttention", model=["7" if args.turbo else "1", 0], head_chunks=4),
     "9": node("MiniMaxChunkFeedForward", model=["8", 0], chunks=4, seq_threshold=4096),
     "10": node("BasicGuider", model=["9", 0], conditioning=["6", 0]),
-    "11": node("RandomNoise", noise_seed=2026100202 if args.variant == "extra" else 2026100201),
+    "11": node("RandomNoise", noise_seed=2026100301 if args.variant == "extra" else 2026100201),
     "12": node("KSamplerSelect", sampler_name="res_multistep"),
     "13": node("BasicScheduler", model=["9", 0], scheduler="simple", steps=8 if args.turbo else 20, denoise=1.0),
     "14": node("SamplerCustomAdvanced", noise=["11", 0], guider=["10", 0], sampler=["12", 0], sigmas=["13", 0], latent_image=["6", 1]),

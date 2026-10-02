@@ -10,7 +10,12 @@
     "device": "AMD Radeon RX 7900 XTX",
     "peak_allocated_gib": 4.0678253173828125,
     "file": "voice-today.wav",
-    "sha256": "132f421ffb51b37627a6ca106eb4cf64c6f038b89d2e3316d2f3caefd0830892"
+    "sha256": "3ef3b213f9c8ecbf7c89a6b64d93b73799e058664323ed5260520fda9d5c9d58",
+    "synthesizedSha256": "132f421ffb51b37627a6ca106eb4cf64c6f038b89d2e3316d2f3caefd0830892",
+    "postprocessing": {
+      "loudnessLufs": -19.999998844374876,
+      "truePeakDb": -6.304072010698002
+    }
   },
   {
     "source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice",
@@ -23,6 +28,11 @@
     "device": "AMD Radeon RX 7900 XTX",
     "peak_allocated_gib": 4.120051860809326,
     "file": "voice-brewing.wav",
-    "sha256": "4c29fd2869f8ee5bac11ca02df30e5d46530fbf9bc78706cc17f72d2d37b3191"
+    "sha256": "c1caf8e788a3273e93a12155b135b029237e481c353ddb7badf273fa9607672a",
+    "synthesizedSha256": "4c29fd2869f8ee5bac11ca02df30e5d46530fbf9bc78706cc17f72d2d37b3191",
+    "postprocessing": {
+      "loudnessLufs": -19.999999883405692,
+      "truePeakDb": -7.056852340414941
+    }
   }
 ]

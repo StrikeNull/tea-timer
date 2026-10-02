@@ -10,42 +10,48 @@
   "steps": 20,
   "sourceFps": 24,
   "gifExport": "28 frames, transparent background, edge spill removal",
-  "seed": 2026100202,
+  "seed": 2026100301,
   "workflows": "workflows/extra-{role}.api.json",
   "generationSessions": "Same local backend; idle model cache released between characters.",
   "clips": [
     {
       "role": "maid",
       "file": "extra-maid.gif",
-      "promptId": "4e0ccf85-31c7-474b-a2d5-8cc6ce273817",
+      "promptId": "53e2e3a9-b606-4759-99d5-ecd55c54d7cb",
       "sourceFrames": 56,
       "gifFrames": 28,
       "durationMilliseconds": 2330,
       "width": 384,
       "height": 384,
-      "sha256": "8e5b4a2f1acd6e2f8e834afa34c9d77fe282a00b4a936b113986e1a875c10bf2"
+      "sourceImageSha256": "2ed9709fcecce072bc5f6a4db21084066b035575efa3eb7f4029e07be230f7d9",
+      "sha256": "ee1c5f35be438938d716a2aac23694b95f727af57e70984ae9903e552ad6b50c"
     },
     {
       "role": "gpt",
       "file": "extra-gpt.gif",
-      "promptId": "ae7acfeb-fb12-44cd-9913-0e346b659076",
+      "promptId": "ea51cf3a-4bf0-4e5d-bed0-9adeb8902140",
       "sourceFrames": 56,
       "gifFrames": 28,
       "durationMilliseconds": 2330,
       "width": 384,
       "height": 384,
-      "sha256": "0b7170e711e62795b29d6444a7a1b46acd5e73696a507a59f292bcab8861b642"
+      "sourceImageSha256": "782dbb373b9ee396d90847e7858938f1dafa7513ea5ea807c2acc8b1a1b7eb51",
+      "sha256": "36b77d4893bdccd28cd958b1109939c7253f2ee826823cfc83b8deb80cab18c5"
     },
     {
       "role": "dragon",
       "file": "extra-dragon.gif",
-      "promptId": "8c28805f-5e40-4ad0-9b5b-a6bd0bfb135d",
+      "promptId": "c59104e5-b7dd-4bc3-8cb5-063c5059c2a4",
       "sourceFrames": 56,
       "gifFrames": 28,
       "durationMilliseconds": 2330,
       "width": 384,
       "height": 384,
-      "sha256": "430548d57a9bacf0ca2cf3f507908977800d767c9bb93bd0c3a9e472fbdb430d"
+      "sourceImageSha256": "5014b87f3d04f29c15a6cdff0062a9b5d0170d16043190d2b9caa13a9dfc2614",
+      "sha256": "617c519574c1a56fdf56e1b40caa48116644b23ec7bac32307f3d2f4878070c0"
     }
-  ]
+  ],
+  "action": "Empty-hand greeting: small wave, blink and return to neutral pose",
+  "sourceImages": "assets/idle-{role}.png",
+  "sourceImageGeneration": "assets/greeting-source-generation.json"
 }

@@ -37,7 +37,7 @@
         "3",
         0
       ],
-      "prompt": "A fixed camera, full body 2D anime sticker animation of the exact white-haired lavender-eyed chibi dragon girl with white horns, lavender wings and tail, white dress and knot ornaments from the first reference frame. Keep her face, clothes, proportions and accessories unchanged. She smiles softly and blinks once, holding her teacup steady with both hands. Her small lavender wings flutter gently once. Her dragon tail stays curled closely beside her body and its tip gives a tiny happy wiggle. Keep the original tail length and wing size. Keep a wide green margin around her whole silhouette throughout; never stretch her tail or wings towards the frame edges. Her hair and skirt move subtly. Smooth natural character motion, no camera motion or zoom, no text, no additional characters, no scene change. Entire character remains inside frame. Background stays a perfectly flat pure bright chroma green RGB 0,255,0, without gradients, shadows or props. The character retains her original colors without green reflections. Silent animation. Finish in a calm steady pose.",
+      "prompt": "A fixed camera, full body 2D anime sticker animation of the exact white-haired lavender-eyed chibi dragon girl with white horns, lavender wings and tail, white dress and knot ornaments from the first reference frame. Keep her face, clothes, proportions and accessories unchanged. She smiles softly and blinks once. She lifts only her left empty hand, gives one small gentle wave near shoulder height, then lowers it back to the exact relaxed waist pose of the first frame. Her other hand stays relaxed at her waist throughout. Her wings and curled tail remain still and close to her body. Both hands remain completely empty. Exactly two arms and two anatomically coherent hands. No cup, saucer, teapot, food or floating objects may appear in any frame. Complete the wave before the final half-second; hold the original neutral first-frame pose at the end. Her hair and skirt move subtly. Smooth natural character motion, no camera motion or zoom, no text, no additional characters, no scene change. Entire character remains inside frame. Background stays a perfectly flat pure bright chroma green RGB 0,255,0, without gradients, shadows or props. The character retains her original colors without green reflections. Silent animation. Finish in a calm steady pose.",
       "width": 384,
       "height": 384,
       "length": 56,
@@ -84,7 +84,7 @@
   "11": {
     "class_type": "RandomNoise",
     "inputs": {
-      "noise_seed": 2026100202
+      "noise_seed": 2026100301
     }
   },
   "12": {

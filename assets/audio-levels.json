@@ -1,0 +1,61 @@
+{
+  "source": "Offline pyloudnorm BS.1770 loudness matching",
+  "targetLufs": -20.0,
+  "truePeakLimitDb": -1,
+  "voices": [
+    {
+      "file": "tea-ready.wav",
+      "beforeLufs": -22.350912583440167,
+      "afterLufs": -20.000003939177205,
+      "gainDb": 2.350912583440166,
+      "truePeakDb": -2.395894927720204,
+      "originalSha256": "8a592e10b767f141263c5bc401afe55ca45751ceaae97364980c836f3b477b1f",
+      "sha256": "b2265be7b3ce61bb4ccc8069dcecdb66c4aa6c8edbd0171c9345b936f5e0e8ad"
+    },
+    {
+      "file": "voice-cheerful.wav",
+      "beforeLufs": -20.077098662905534,
+      "afterLufs": -19.999996998182507,
+      "gainDb": 0.07709866290553365,
+      "truePeakDb": -3.740461398057814,
+      "originalSha256": "7749464ae13652d6d05d5bc23799dd1177ed2f3a13dd3a72be3441931e52683c",
+      "sha256": "a9a2f949b9599974be4f7249370e3959049d0e8141ea1d47f022c4d86481d73e"
+    },
+    {
+      "file": "voice-soft.wav",
+      "beforeLufs": -25.308511762594595,
+      "afterLufs": -19.999998551039628,
+      "gainDb": 5.308511762594595,
+      "truePeakDb": -4.079254491705354,
+      "originalSha256": "bf480b6397fcc367d29daf9aa29abe3c74d5f371d32cd50b24710f92c0a78ca1",
+      "sha256": "796eead343fe6d9212c2b11e0ebfd90fc62a8b4e6307885c6bce38b8209d70ff"
+    },
+    {
+      "file": "voice-playful.wav",
+      "beforeLufs": -26.303338700035535,
+      "afterLufs": -20.000002822847303,
+      "gainDb": 6.303338700035535,
+      "truePeakDb": -1.7049676246650822,
+      "originalSha256": "2fd94ed15f15c9654a1c27b312404cacc1943df9374d76d1ce0355213000bb32",
+      "sha256": "2157cc9df63252f7689123a29a53e1c655ab9992b4e3954e1e0ae946b649c6ff"
+    },
+    {
+      "file": "voice-today.wav",
+      "beforeLufs": -27.840165575386212,
+      "afterLufs": -19.999998844374876,
+      "gainDb": 7.840165575386212,
+      "truePeakDb": -6.304072010698002,
+      "originalSha256": "132f421ffb51b37627a6ca106eb4cf64c6f038b89d2e3316d2f3caefd0830892",
+      "sha256": "3ef3b213f9c8ecbf7c89a6b64d93b73799e058664323ed5260520fda9d5c9d58"
+    },
+    {
+      "file": "voice-brewing.wav",
+      "beforeLufs": -19.012748071698525,
+      "afterLufs": -19.999999883405692,
+      "gainDb": -0.9872519283014752,
+      "truePeakDb": -7.056852340414941,
+      "originalSha256": "4c29fd2869f8ee5bac11ca02df30e5d46530fbf9bc78706cc17f72d2d37b3191",
+      "sha256": "c1caf8e788a3273e93a12155b135b029237e481c353ddb7badf273fa9607672a"
+    }
+  ]
+}
