@@ -101,11 +101,11 @@ namespace TeaTimer
         private readonly Color accent;
         internal bool AnimationRunning { get { return animation.Enabled; } }
         internal bool HasVideoClip { get { return clip != null; } }
-        internal ReminderMascot(int kind, Color color, bool animate)
+        internal ReminderMascot(int kind, Color color, bool animate, ReminderProfile profile = null)
         {
             Kind = kind; accent = color;
             started = Native.GetTickCount64();
-            if (animate) clip = new ReminderClip(kind);
+            if (animate) clip = new ReminderClip(kind, profile == null ? 0 : profile.AnimationStyle, profile == null ? null : profile.AnimationFile);
             SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
             animation.Tick += delegate
             {
@@ -125,8 +125,9 @@ namespace TeaTimer
             {
                 clip.SelectFrame(clip.FrameAt((long)(Native.GetTickCount64() - started)));
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                float width = size * clip.Image.Width / clip.Image.Height;
-                g.DrawImage(clip.Image, new RectangleF((Width - width) / 2, (Height - size) / 2, width, size));
+                float factor = Math.Min(size / clip.Image.Width, size / clip.Image.Height);
+                float width = clip.Image.Width * factor, height = clip.Image.Height * factor;
+                g.DrawImage(clip.Image, new RectangleF((Width - width) / 2, (Height - height) / 2, width, height));
             }
             else artwork.Draw(g, new RectangleF((Width - size) / 2, (Height - size) / 2, size, size),
                 scale, Kind, TimerState.Finished, accent, false, 0);
@@ -309,6 +310,7 @@ namespace TeaTimer
             preferences.Times = (int[])result.Times.Clone(); preferences.Sound = result.Sound; preferences.OnTop = result.OnTop;
             preferences.RoundIncrements = (int[])result.RoundIncrements.Clone();
             preferences.VoiceReminder = result.VoiceReminder;
+            preferences.Reminders = MediaCatalog.CopyProfiles(result.Reminders);
             preferences.ShowMascot = result.ShowMascot; preferences.AnimateMascot = result.AnimateMascot;
             preferences.MascotKind = result.MascotKind;
             clockPanel.ShowMascot = preferences.ShowMascot; clockPanel.AnimateMascot = preferences.AnimateMascot;
@@ -353,7 +355,7 @@ namespace TeaTimer
             Tea tea = Tea.All[preferences.Selected];
             if (preferences.Sound && !preferences.VoiceReminder && !SilentTest) SystemSounds.Exclamation.Play();
             if (!SilentTest) tray.ShowBalloonTip(6000, "茶泡好了", tea.Name + "已到时间，请及时出汤。", ToolTipIcon.Info);
-            alert = new AlertForm(tea.Name, Icon, tea.Accent, preferences.MascotKind, preferences.ShowMascot, preferences.AnimateMascot, preferences.Sound && preferences.VoiceReminder && !SilentTest); alert.FormClosed += delegate { alert = null; }; alert.Show();
+            alert = new AlertForm(tea.Name, Icon, tea.Accent, preferences.MascotKind, preferences.ShowMascot, preferences.AnimateMascot, preferences.Sound && preferences.VoiceReminder && !SilentTest, preferences.Reminders[preferences.MascotKind]); alert.FormClosed += delegate { alert = null; }; alert.Show();
         }
         private void DismissAlert() { if (alert != null) { alert.Close(); alert = null; } }
         private void RestoreWindow() { Show(); WindowState = FormWindowState.Normal; Activate(); if (alert != null) alert.Activate(); }
@@ -371,14 +373,16 @@ namespace TeaTimer
         private readonly NumericUpDown[] increments = new NumericUpDown[6];
         private readonly CheckBox sound, voiceReminder, onTop, showMascot, animateMascot;
         private ReminderSpeech previewSpeech;
+        private ReminderProfile[] reminderProfiles;
+        private readonly string mediaDirectory;
         private readonly TeaPickerButton mascotPicker;
         private readonly ContextMenuStrip mascotMenu;
         private int selectedMascot;
         private readonly Label status;
         internal Preferences Result { get; private set; }
-        internal SettingsForm(Preferences preferences, bool busy)
+        internal SettingsForm(Preferences preferences, bool busy, string mediaDirectory = null)
         {
-            SuspendLayout(); original = preferences;
+            SuspendLayout(); original = preferences; reminderProfiles = MediaCatalog.CopyProfiles(preferences.Reminders); this.mediaDirectory = mediaDirectory;
             Text = "配置 · 一盏茶"; BackColor = Style.Background; ForeColor = Style.Ink; Font = Style.Font(9, FontStyle.Regular);
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
             ShowInTaskbar = false; StartPosition = FormStartPosition.CenterParent; TopMost = preferences.OnTop;
@@ -408,7 +412,12 @@ namespace TeaTimer
             Controls.Add(voiceReminder);
             ActionButton audition = new ActionButton("试听", false) { AccessibleName = "试听泡茶娘提醒语音" }; audition.SetBounds(378, 304, 56, 27);
             audition.Font = Style.Font(8, FontStyle.Regular);
-            audition.Click += delegate { if (previewSpeech == null) previewSpeech = new ReminderSpeech(); previewSpeech.Play(); }; Controls.Add(audition);
+            audition.Click += delegate
+            {
+                if (previewSpeech != null) previewSpeech.Dispose();
+                ReminderProfile profile = reminderProfiles[selectedMascot];
+                previewSpeech = new ReminderSpeech(profile.VoiceStyle, profile.VoiceFile); previewSpeech.Play();
+            }; Controls.Add(audition);
             Disposed += delegate { if (previewSpeech != null) previewSpeech.Dispose(); };
             showMascot = new CheckBox { Text = "显示泡茶娘", Checked = preferences.ShowMascot, AutoSize = true, Location = new Point(22, 338) };
             animateMascot = new CheckBox { Text = "播放动画", Checked = preferences.AnimateMascot, Enabled = preferences.ShowMascot, AutoSize = true, Location = new Point(180, 338) };
@@ -423,7 +432,15 @@ namespace TeaTimer
             }
             mascotPicker.Click += delegate { mascotMenu.Show(mascotPicker, new Point(0, mascotPicker.Height)); };
             ChooseMascot(preferences.MascotKind); Disposed += delegate { mascotMenu.Dispose(); };
-            AddLabel("每轮 +秒：0 不增加，重置 / 换茶回第一轮。", 22, 398, 414, 25, 8, FontStyle.Regular);
+            AddLabel("每轮 +秒：0 不增加，重置 / 换茶回第一轮。", 22, 398, 280, 25, 8, FontStyle.Regular);
+            ActionButton media = new ActionButton("动画与语音", false) { AccessibleName = "选择或替换提醒动画和语音" };
+            media.Font = Style.Font(8, FontStyle.Regular); media.SetBounds(314, 398, 120, 27);
+            media.Click += delegate
+            {
+                if (previewSpeech != null) { previewSpeech.Dispose(); previewSpeech = null; }
+                using (MediaSettingsForm editor = new MediaSettingsForm(reminderProfiles, selectedMascot))
+                    if (editor.ShowDialog(this) == DialogResult.OK) reminderProfiles = editor.Result;
+            }; Controls.Add(media);
             status = AddLabel(busy ? "正在计时：时间修改在下一次泡茶生效。" : "每轮时间上限：99 分 59 秒。", 22, 422, 414, 27, 8, FontStyle.Regular);
             ActionButton save = new ActionButton("保存", true); save.SetBounds(20, 462, 298, 34);
             save.Click += delegate { if (SaveChanges()) { DialogResult = DialogResult.OK; Close(); } }; Controls.Add(save);
@@ -452,6 +469,7 @@ namespace TeaTimer
         internal void SetTime(int index, int duration) { minutes[index].Value = duration / 60; seconds[index].Value = duration % 60; }
         internal void SetIncrement(int index, int increment) { increments[index].Value = increment; }
         internal void ChooseVoiceReminder(bool enabled) { voiceReminder.Checked = enabled; }
+        internal void ChooseReminderProfiles(ReminderProfile[] profiles) { reminderProfiles = MediaCatalog.CopyProfiles(profiles); }
         internal void ChooseMascot(int kind)
         {
             selectedMascot = Math.Max(0, Math.Min(MascotCatalog.Names.Length - 1, kind));
@@ -468,7 +486,10 @@ namespace TeaTimer
                 increases[i] = (int)increments[i].Value;
                 if (times[i] == 0) { status.Text = Tea.All[i].Name + "的时间需要大于 0 秒。"; status.ForeColor = Color.Firebrick; minutes[i].Focus(); return false; }
             }
-            Result = new Preferences { Selected = original.Selected, Times = times, RoundIncrements = increases, Sound = sound.Checked, VoiceReminder = voiceReminder.Checked, OnTop = onTop.Checked, ShowMascot = showMascot.Checked, AnimateMascot = animateMascot.Checked, MascotKind = selectedMascot, WindowWidth = original.WindowWidth, WindowHeight = original.WindowHeight };
+            ReminderProfile[] stored;
+            try { stored = MediaLibrary.Store(reminderProfiles, mediaDirectory); }
+            catch (Exception e) { if (!MediaLibrary.IsMediaError(e)) throw; status.Text = "素材保存失败：" + e.Message; status.ForeColor = Color.Firebrick; return false; }
+            Result = new Preferences { Selected = original.Selected, Times = times, RoundIncrements = increases, Sound = sound.Checked, VoiceReminder = voiceReminder.Checked, OnTop = onTop.Checked, ShowMascot = showMascot.Checked, AnimateMascot = animateMascot.Checked, MascotKind = selectedMascot, Reminders = stored, WindowWidth = original.WindowWidth, WindowHeight = original.WindowHeight };
             return true;
         }
         internal void CapturePreview(string path) { Style.CaptureForm(this, path); }

@@ -78,6 +78,7 @@ namespace TeaTimer
         public bool ShowMascot = true;
         public bool AnimateMascot = true;
         public int MascotKind = 0;
+        public ReminderProfile[] Reminders = { new ReminderProfile(), new ReminderProfile(), new ReminderProfile() };
         public int WindowWidth = 280;
         public int WindowHeight = 236;
         public static string FilePath { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YiZhanCha", "settings.xml"); } }
@@ -96,6 +97,7 @@ namespace TeaTimer
                     p.WindowWidth = Math.Max(260, Math.Min(1280, p.WindowWidth));
                     p.WindowHeight = Math.Max(208, Math.Min(960, p.WindowHeight));
                     if (p.MascotKind < 0 || p.MascotKind >= MascotCatalog.Names.Length) p.MascotKind = 0;
+                    p.Reminders = MediaCatalog.CopyProfiles(p.Reminders);
                     return p;
                 }
             }
@@ -198,22 +200,22 @@ namespace TeaTimer
     {
         internal readonly ReminderMascot Mascot;
         private readonly ReminderSpeech speech;
-        public AlertForm(string tea, Icon icon, Color accent = default(Color), int mascotKind = 0, bool showMascot = true, bool animateMascot = true, bool voiceReminder = false)
+        public AlertForm(string tea, Icon icon, Color accent = default(Color), int mascotKind = 0, bool showMascot = true, bool animateMascot = true, bool voiceReminder = false, ReminderProfile profile = null, bool preview = false)
         {
             SuspendLayout();
             if (accent.IsEmpty) accent = Style.Green;
-            Text = "茶泡好了 · 一盏茶"; Icon = icon; TopMost = true; ShowInTaskbar = true;
+            Text = preview ? "动画预览 · 一盏茶" : "茶泡好了 · 一盏茶"; Icon = icon; TopMost = true; ShowInTaskbar = true;
             AutoScaleMode = AutoScaleMode.None;
             float scale; using (Graphics g = CreateGraphics()) scale = g.DpiY / 96f;
             ClientSize = new Size((int)Math.Round((showMascot ? 320 : 280) * scale), (int)Math.Round(166 * scale)); BackColor = Style.Blend(accent, Color.White, .06f); StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
-            Label title = new Label { Text = "茶泡好了", Font = Style.Font(18, FontStyle.Bold), ForeColor = accent, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(154, 16, 158, 40) : new Rectangle(20, 16, 240, 40) };
-            Label body = new Label { Text = tea + (showMascot ? "已到时间，\n请及时出汤。" : "已到时间，请及时出汤。"), Font = Style.Font(9, FontStyle.Regular), ForeColor = Style.Muted, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(154, 58, 158, 40) : new Rectangle(14, 60, 252, 32) };
-            ActionButton ok = new ActionButton("知道了，喝茶去", true) { Accent = accent, Bounds = showMascot ? new Rectangle(164, 116, 144, 36) : new Rectangle(40, 116, 200, 36), DialogResult = DialogResult.OK };
+            Label title = new Label { Text = preview ? "动画预览" : "茶泡好了", Font = Style.Font(18, FontStyle.Bold), ForeColor = accent, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(154, 16, 158, 40) : new Rectangle(20, 16, 240, 40) };
+            Label body = new Label { Text = preview ? "播放一次后\n停在最后一帧。" : tea + (showMascot ? "已到时间，\n请及时出汤。" : "已到时间，请及时出汤。"), Font = Style.Font(9, FontStyle.Regular), ForeColor = Style.Muted, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(154, 58, 158, 40) : new Rectangle(14, 60, 252, 32) };
+            ActionButton ok = new ActionButton(preview ? "关闭预览" : "知道了，喝茶去", true) { Accent = accent, Bounds = showMascot ? new Rectangle(164, 116, 144, 36) : new Rectangle(40, 116, 200, 36), DialogResult = DialogResult.OK };
             ok.Click += delegate { Close(); }; Controls.Add(title); Controls.Add(body); Controls.Add(ok); AcceptButton = ok; CancelButton = ok;
             if (showMascot)
             {
-                Mascot = new ReminderMascot(mascotKind, accent, animateMascot) { Bounds = new Rectangle(4, 4, 150, 154) };
+                Mascot = new ReminderMascot(mascotKind, accent, animateMascot, profile) { Bounds = new Rectangle(4, 4, 150, 154) };
                 Controls.Add(Mascot);
             }
             foreach (Control child in Controls)
@@ -222,7 +224,7 @@ namespace TeaTimer
                 child.Bounds = new Rectangle((int)Math.Round(b.X * scale), (int)Math.Round(b.Y * scale), (int)Math.Round(b.Width * scale), (int)Math.Round(b.Height * scale));
             }
             ResumeLayout(false);
-            if (voiceReminder) speech = new ReminderSpeech();
+            if (voiceReminder) speech = new ReminderSpeech(profile == null ? 0 : profile.VoiceStyle, profile == null ? null : profile.VoiceFile);
         }
         protected override void OnShown(EventArgs e) { base.OnShown(e); if (speech != null) speech.Play(); }
         protected override void Dispose(bool disposing) { if (disposing && speech != null) speech.Dispose(); base.Dispose(disposing); }
@@ -389,9 +391,12 @@ namespace TeaTimer
                 Assert(legacy.Times[0] == 60 && legacy.OnTop && legacy.WindowWidth == 280 && legacy.WindowHeight == 236, "old configuration migrates without losing times");
                 Assert(legacy.RoundIncrements.Length == 6 && legacy.RoundIncrements[0] == 0, "legacy settings default to no round increase");
                 Assert(legacy.VoiceReminder, "legacy settings enable voice option");
+                Assert(legacy.Reminders.Length == 3 && legacy.Reminders[2].AnimationStyle == 0 && legacy.Reminders[2].VoiceStyle == 0, "legacy settings keep original media defaults");
                 using (ReminderSpeech speech = new ReminderSpeech()) Assert(speech.IsLoaded, "embedded local TTS WAV loads for playback");
                 for (int role = 0; role < MascotCatalog.Names.Length; role++)
                 {
+                    using (ReminderClip extra = new ReminderClip(role, 1))
+                        Assert(extra.FrameCount >= 20 && extra.DurationMilliseconds >= 2000 && extra.DurationMilliseconds <= 3000, "each character has an additional local animation");
                     using (ReminderClip clip = new ReminderClip(role))
                     {
                         Assert(clip.FrameCount >= 20 && clip.DurationMilliseconds >= 2000 && clip.DurationMilliseconds <= 3000, "each character has a 2-3 second animated clip");
@@ -417,7 +422,71 @@ namespace TeaTimer
                         Style.CaptureForm(alert, Path.Combine(directory, "preview-alert-" + role + ".png")); alert.Close();
                     }
                 }
-                File.WriteAllText(report, "PASS: countdown, pause/resume, deadline boundary, single completion, repeat, sleep recovery, zero/max bounds, all 6 presets, per-tea round increases, pause/round boundaries, reset/tea-change round reset, updated increments, maximum round duration, UI transitions, alerts, selected reminder roles, static/hidden reminders, animation disposal, reminder DPI layouts, configuration validation, active-timer preservation, resize layouts, persistence/reopening, legacy migration and renders.");
+                for (int voice = 0; voice < 4; voice++) using (ReminderSpeech speech = new ReminderSpeech(voice))
+                    Assert(speech.IsLoaded, "all four embedded WAV voices load");
+                string mediaSource = Path.Combine(directory, "custom-source"); Directory.CreateDirectory(mediaSource);
+                string customGif = Path.Combine(mediaSource, "my-animation.gif"), customWave = Path.Combine(mediaSource, "my-voice.wav");
+                using (Stream source = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("TeaTimer.ExtraDragon"))
+                using (FileStream target = File.Create(customGif)) source.CopyTo(target);
+                using (Stream source = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("TeaTimer.VoiceSoft"))
+                using (FileStream target = File.Create(customWave)) source.CopyTo(target);
+                Preferences mediaPrefs = new Preferences(); ReminderProfile[] choices;
+                using (MediaSettingsForm editor = new MediaSettingsForm(mediaPrefs.Reminders, 2))
+                {
+                    editor.Show(); Application.DoEvents();
+                    Assert(editor.SetCustomFile(customGif, true) && editor.SetCustomFile(customWave, false), "valid GIF and WAV can be selected");
+                    Assert(mediaPrefs.Reminders[2].AnimationFile == "" && mediaPrefs.Reminders[2].VoiceFile == "", "media edits remain isolated until save");
+                    editor.ChooseRole(0); editor.ChooseAnimation(2); editor.ChooseVoice(4);
+                    editor.ChooseRole(1); editor.ChooseAnimation(1); editor.ChooseVoice(1);
+                    editor.ChooseRole(2); editor.CapturePreview(Path.Combine(directory, "preview-media-custom.png"));
+                    Assert(editor.ApplyChanges(), "media choices apply for all characters"); choices = editor.Result; editor.Close();
+                }
+                string mediaDirectory = Path.Combine(directory, "imported-media");
+                using (SettingsForm settings = new SettingsForm(mediaPrefs, false, mediaDirectory))
+                {
+                    settings.ChooseReminderProfiles(choices); Assert(settings.SaveChanges(), "save imports custom media");
+                    Assert(mediaPrefs.Reminders[2].AnimationFile == "", "saving staged settings does not mutate original preferences");
+                    mediaPrefs = settings.Result;
+                }
+                ReminderProfile imported = mediaPrefs.Reminders[2];
+                Assert(imported.AnimationFile.StartsWith(mediaDirectory) && imported.VoiceFile.StartsWith(mediaDirectory), "custom media is copied to managed storage");
+                File.Delete(customGif); File.Delete(customWave);
+                using (ReminderClip clip = new ReminderClip(2, imported.AnimationStyle, imported.AnimationFile))
+                    Assert(clip.FrameCount >= 20, "imported animation survives removal of original file");
+                using (ReminderSpeech speech = new ReminderSpeech(imported.VoiceStyle, imported.VoiceFile))
+                    Assert(speech.IsLoaded, "imported voice survives removal of original file");
+                string mediaSettingsPath = Path.Combine(directory, "media-settings.xml"); Assert(mediaPrefs.Save(mediaSettingsPath), "media settings serialize");
+                Preferences restoredMedia = Preferences.Load(mediaSettingsPath);
+                Assert(restoredMedia.Reminders[0].AnimationStyle == 2 && restoredMedia.Reminders[0].VoiceStyle == 4
+                    && restoredMedia.Reminders[1].VoiceStyle == 1 && restoredMedia.Reminders[2].AnimationFile == imported.AnimationFile
+                    && restoredMedia.Reminders[2].VoiceFile == imported.VoiceFile, "each character restores its own media choices");
+                string invalidGif = Path.Combine(mediaSource, "broken.gif"), invalidWave = Path.Combine(mediaSource, "broken.wav");
+                File.WriteAllText(invalidGif, "invalid image"); File.WriteAllText(invalidWave, "invalid audio");
+                using (MediaSettingsForm editor = new MediaSettingsForm(restoredMedia.Reminders, 2))
+                {
+                    Assert(!editor.SetCustomFile(invalidGif, true) && !editor.SetCustomFile(invalidWave, false), "invalid imports are rejected");
+                    editor.RestoreDefault(true); editor.RestoreDefault(false); Assert(editor.ApplyChanges(), "restore built-in media choices");
+                    Assert(editor.Result[2].AnimationStyle == 0 && editor.Result[2].AnimationFile == "" && editor.Result[2].VoiceFile == "", "restore default clears replacements");
+                    Assert(restoredMedia.Reminders[2].AnimationFile == imported.AnimationFile, "cancelled editor cannot change saved profile");
+                }
+                using (ReminderClip fallback = new ReminderClip(2, MediaCatalog.CustomAnimation, invalidGif))
+                    Assert(fallback.FrameCount >= 20, "broken custom animation falls back to embedded clip");
+                using (ReminderSpeech fallback = new ReminderSpeech(MediaCatalog.CustomVoice, invalidWave))
+                    Assert(fallback.IsLoaded, "broken custom voice falls back to embedded WAV");
+                File.Delete(imported.AnimationFile); File.Delete(imported.VoiceFile);
+                using (AlertForm fallbackAlert = new AlertForm("红茶", SystemIcons.Information, Tea.All[1].Accent, 2, true, true, false, imported))
+                {
+                    fallbackAlert.Show(); Application.DoEvents(); Assert(fallbackAlert.Mascot.HasVideoClip, "missing custom file cannot break reminder"); fallbackAlert.Close();
+                }
+                using (ReminderSpeech fallback = new ReminderSpeech(MediaCatalog.CustomVoice, imported.VoiceFile))
+                    Assert(fallback.IsLoaded, "missing voice file falls back to embedded WAV");
+                using (MediaSettingsForm editor = new MediaSettingsForm(new Preferences().Reminders, 0))
+                {
+                    editor.Show(); Application.DoEvents(); editor.CapturePreview(Path.Combine(directory, "preview-media.png"));
+                    foreach (Control child in editor.Controls) Assert(child.Right <= editor.ClientSize.Width && child.Bottom <= editor.ClientSize.Height, "media editor fits current DPI");
+                    editor.Close();
+                }
+                File.WriteAllText(report, "PASS: timer, round increments, legacy settings, layout, six embedded animations, four local voices, single animation playback, isolated media edits, per-character selection persistence, GIF/WAV import, managed copies, original-file removal, invalid-file rejection, missing/corrupt-file fallback, restoring defaults, media editor DPI and renders.");
             }
             catch (Exception e) { File.WriteAllText(report, "FAIL: " + e); Environment.ExitCode = 1; }
         }

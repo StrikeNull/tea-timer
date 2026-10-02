@@ -1,0 +1,41 @@
+[
+  {
+    "source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    "speaker": "Vivian",
+    "text": "主人，茶泡好啦，请享用。",
+    "instruction": "用甜美活泼的动漫女仆少女语气，带着笑意，清晰自然，语速正常。",
+    "sample_rate": 24000,
+    "duration_seconds": 3.04,
+    "generation_seconds": 16.033430000010412,
+    "device": "AMD Radeon RX 7900 XTX",
+    "peak_allocated_gib": 4.1521897315979,
+    "file": "voice-cheerful.wav",
+    "sha256": "c8a2dbfc90e0c8c95042848c8e4414409a0dd07fdeac96be4c544dccc643f8e5"
+  },
+  {
+    "source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    "speaker": "Serena",
+    "text": "茶香正好，记得及时出汤哦。",
+    "instruction": "用温柔舒缓的少女语气轻声提醒，自然亲切，语速正常，不要拖长尾音。",
+    "sample_rate": 24000,
+    "duration_seconds": 3.2,
+    "generation_seconds": 5.431229000008898,
+    "device": "AMD Radeon RX 7900 XTX",
+    "peak_allocated_gib": 4.160223484039307,
+    "file": "voice-soft.wav",
+    "sha256": "bf480b6397fcc367d29daf9aa29abe3c74d5f371d32cd50b24710f92c0a78ca1"
+  },
+  {
+    "source": "Local Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    "speaker": "Vivian",
+    "text": "叮咚，茶好啦，快来喝茶吧。",
+    "instruction": "用俏皮可爱的少女语气，明亮轻快，有一点开心的小雀跃，语速正常。",
+    "sample_rate": 24000,
+    "duration_seconds": 2.8,
+    "generation_seconds": 4.837576700010686,
+    "device": "AMD Radeon RX 7900 XTX",
+    "peak_allocated_gib": 4.140137672424316,
+    "file": "voice-playful.wav",
+    "sha256": "f80f1b161a6ea458c8b0df98ee04671e350cb27976d8438034ae368eec1b4d52"
+  }
+]
