@@ -39,6 +39,89 @@ namespace TeaTimer
         }
     }
 
+    internal sealed class MascotArtwork : IDisposable
+    {
+        private readonly Bitmap[] mascots = new Bitmap[MascotCatalog.Names.Length];
+        public MascotArtwork()
+        {
+            string[] resources = MascotCatalog.Resources;
+            for (int i = 0; i < resources.Length; i++)
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resources[i]))
+                using (Image source = Image.FromStream(stream)) mascots[i] = new Bitmap(source);
+        }
+        public void Dispose() { foreach (Bitmap mascot in mascots) mascot.Dispose(); }
+        public void Draw(Graphics g, RectangleF bounds, float scale, int kind, TimerState state, Color accent, bool animate, double phase)
+        {
+            float size = bounds.Height;
+            bool moving = animate && state != TimerState.Paused;
+            float bob = moving ? (float)Math.Sin(phase * 2.4) * 2 * scale : 0;
+            float tilt = moving ? (float)Math.Sin(phase * 1.8) * (state == TimerState.Finished ? 2 : .7f) : 0;
+            int frame = state == TimerState.Running ? 1 : state == TimerState.Finished ? 2 : 0;
+            Bitmap mascot = mascots[Math.Max(0, Math.Min(mascots.Length - 1, kind))];
+            float drawWidth = size * mascot.Width / 3f / mascot.Height;
+            float x = bounds.X, y = bounds.Y + bob;
+            GraphicsState saved = g.Save();
+            g.TranslateTransform(x + size / 2, y + size / 2); g.RotateTransform(tilt);
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(mascot, new RectangleF(-drawWidth / 2, -size / 2, drawWidth, size),
+                new RectangleF(frame * mascot.Width / 3f, 0, mascot.Width / 3f, mascot.Height), GraphicsUnit.Pixel);
+            g.Restore(saved);
+            if (state == TimerState.Running)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    float rise = moving ? (float)((phase * .50 + i * .33) % 1) : .45f;
+                    int alpha = (int)((1 - rise) * 120);
+                    float steamX = x + size * (.40f + i * .055f), steamY = y + size * .53f - rise * size * .20f;
+                    using (Pen pen = new Pen(Color.FromArgb(alpha, accent), 1.2f * scale))
+                        g.DrawBezier(pen, steamX, steamY, steamX - 3 * scale, steamY - 3 * scale, steamX + 3 * scale, steamY - 6 * scale, steamX, steamY - 9 * scale);
+                }
+            }
+            if (state == TimerState.Finished)
+            {
+                float pulse = moving ? .7f + .3f * (float)Math.Sin(phase * 3) : 1;
+                DrawSparkle(g, accent, x + size * .12f, y + size * .22f, 4 * scale * pulse);
+                DrawSparkle(g, accent, x + size * .90f, y + size * .09f, 3 * scale * pulse);
+            }
+        }
+        private void DrawSparkle(Graphics g, Color color, float x, float y, float radius)
+        {
+            using (Brush brush = new SolidBrush(color))
+                g.FillPolygon(brush, new PointF[] { new PointF(x, y - radius), new PointF(x + radius * .35f, y - radius * .35f), new PointF(x + radius, y), new PointF(x + radius * .35f, y + radius * .35f), new PointF(x, y + radius), new PointF(x - radius * .35f, y + radius * .35f), new PointF(x - radius, y), new PointF(x - radius * .35f, y - radius * .35f) });
+        }
+    }
+
+    internal sealed class ReminderMascot : Control
+    {
+        private readonly MascotArtwork artwork = new MascotArtwork();
+        private readonly System.Windows.Forms.Timer animation = new System.Windows.Forms.Timer { Interval = 50 };
+        internal readonly int Kind;
+        private readonly Color accent;
+        internal bool AnimationRunning { get { return animation.Enabled; } }
+        internal ReminderMascot(int kind, Color color, bool animate)
+        {
+            Kind = kind; accent = color;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+            animation.Tick += delegate { Invalidate(); };
+            animation.Enabled = animate;
+            AccessibleName = MascotCatalog.Names[Math.Max(0, Math.Min(MascotCatalog.Names.Length - 1, kind))] + "提醒你喝茶";
+            TabStop = false;
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+            float scale = g.DpiY / 96f;
+            float size = Math.Min(Width, Height) - 8 * scale;
+            artwork.Draw(g, new RectangleF((Width - size) / 2, (Height - size) / 2, size, size),
+                scale, Kind, TimerState.Finished, accent, animation.Enabled, Native.GetTickCount64() / 1000.0);
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { animation.Stop(); animation.Dispose(); artwork.Dispose(); }
+            base.Dispose(disposing);
+        }
+    }
+
     internal sealed class ClockPanel : Control
     {
         public Countdown Countdown;
@@ -46,16 +129,12 @@ namespace TeaTimer
         public bool ShowMascot = true, AnimateMascot = true;
         public int MascotKind;
         public Func<long> Clock;
-        private readonly Bitmap[] mascots = new Bitmap[MascotCatalog.Names.Length];
+        private readonly MascotArtwork artwork = new MascotArtwork();
         public ClockPanel()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
-            string[] resources = MascotCatalog.Resources;
-            for (int i = 0; i < resources.Length; i++)
-                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resources[i]))
-                using (Image source = Image.FromStream(stream)) mascots[i] = new Bitmap(source);
         }
-        protected override void Dispose(bool disposing) { if (disposing) foreach (Bitmap mascot in mascots) mascot.Dispose(); base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) artwork.Dispose(); base.Dispose(disposing); }
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -76,51 +155,13 @@ namespace TeaTimer
             string state = Countdown.State == TimerState.Running ? "正在泡茶" : Countdown.State == TimerState.Paused ? "已暂停" : Countdown.State == TimerState.Finished ? "茶泡好了，请及时出汤" : "点击开始泡茶";
             Style.Text(g, state, 9 * scale, FontStyle.Regular, Tea.Accent,
                 new RectangleF(0, Height * .66f, textWidth, 22 * scale), StringAlignment.Center);
-            if (ShowMascot) DrawMascot(g, scale, mascotSize);
+            if (ShowMascot) artwork.Draw(g, new RectangleF(Width - mascotSize - 8 * scale, (Height - mascotSize) / 2 - 3 * scale, mascotSize, mascotSize),
+                scale, MascotKind, Countdown.State, Tea.Accent, AnimateMascot, Clock == null ? 0 : Clock() / 1000.0);
             float progress = Math.Max(0, Math.Min(1, 1f - (float)Countdown.RemainingMilliseconds / (Countdown.DurationSeconds * 1000f)));
             RectangleF track = new RectangleF(14 * scale, Height - 12 * scale, Width - 28 * scale, 3 * scale);
             using (Brush brush = new SolidBrush(ColorTranslator.FromHtml("#E9EEE5"))) g.FillRectangle(brush, track);
             if (progress > 0) using (Brush brush = new SolidBrush(Tea.Accent))
                 g.FillRectangle(brush, track.X, track.Y, track.Width * progress, track.Height);
-        }
-        private void DrawMascot(Graphics g, float scale, float size)
-        {
-            bool moving = AnimateMascot && Countdown.State != TimerState.Paused;
-            double phase = Clock == null ? 0 : Clock() / 1000.0;
-            float bob = moving ? (float)Math.Sin(phase * 2.4) * 2 * scale : 0;
-            float tilt = moving ? (float)Math.Sin(phase * 1.8) * (Countdown.State == TimerState.Finished ? 2 : .7f) : 0;
-            int frame = Countdown.State == TimerState.Running ? 1 : Countdown.State == TimerState.Finished ? 2 : 0;
-            Bitmap mascot = mascots[Math.Max(0, Math.Min(mascots.Length - 1, MascotKind))];
-            float drawWidth = size * mascot.Width / 3f / mascot.Height;
-            float x = Width - size - 8 * scale, y = (Height - size) / 2 - 3 * scale + bob;
-            GraphicsState saved = g.Save();
-            g.TranslateTransform(x + size / 2, y + size / 2); g.RotateTransform(tilt);
-            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            g.DrawImage(mascot, new RectangleF(-drawWidth / 2, -size / 2, drawWidth, size),
-                new RectangleF(frame * mascot.Width / 3f, 0, mascot.Width / 3f, mascot.Height), GraphicsUnit.Pixel);
-            g.Restore(saved);
-            if (Countdown.State == TimerState.Running)
-            {
-                for (int i = 0; i < 3; i++)
-                {
-                    float rise = moving ? (float)((phase * .50 + i * .33) % 1) : .45f;
-                    int alpha = (int)((1 - rise) * 120);
-                    float steamX = x + size * (.40f + i * .055f), steamY = y + size * .53f - rise * size * .20f;
-                    using (Pen pen = new Pen(Color.FromArgb(alpha, Tea.Accent), 1.2f * scale))
-                        g.DrawBezier(pen, steamX, steamY, steamX - 3 * scale, steamY - 3 * scale, steamX + 3 * scale, steamY - 6 * scale, steamX, steamY - 9 * scale);
-                }
-            }
-            if (Countdown.State == TimerState.Finished)
-            {
-                float pulse = moving ? .7f + .3f * (float)Math.Sin(phase * 3) : 1;
-                DrawSparkle(g, Tea.Accent, x + size * .12f, y + size * .22f, 4 * scale * pulse);
-                DrawSparkle(g, Tea.Accent, x + size * .90f, y + size * .09f, 3 * scale * pulse);
-            }
-        }
-        private void DrawSparkle(Graphics g, Color color, float x, float y, float radius)
-        {
-            using (Brush brush = new SolidBrush(color))
-                g.FillPolygon(brush, new PointF[] { new PointF(x, y - radius), new PointF(x + radius * .35f, y - radius * .35f), new PointF(x + radius, y), new PointF(x + radius * .35f, y + radius * .35f), new PointF(x, y + radius), new PointF(x - radius * .35f, y + radius * .35f), new PointF(x - radius, y), new PointF(x - radius * .35f, y - radius * .35f) });
         }
     }
 
@@ -139,6 +180,7 @@ namespace TeaTimer
         internal int CompletionCount { get; private set; }
         internal bool SilentTest, TestNotifications;
         internal Countdown Model { get { return countdown; } }
+        internal AlertForm CurrentAlert { get { return alert; } }
         internal bool HasVisibleAlert { get { return alert != null && alert.Visible && alert.TopMost; } }
         internal TeaForm(Preferences prefs, Func<long> now, bool silentTest = false)
         {
@@ -283,7 +325,7 @@ namespace TeaTimer
             Tea tea = Tea.All[preferences.Selected];
             if (preferences.Sound && !SilentTest) SystemSounds.Exclamation.Play();
             if (!SilentTest) tray.ShowBalloonTip(6000, "茶泡好了", tea.Name + "已到时间，请及时出汤。", ToolTipIcon.Info);
-            alert = new AlertForm(tea.Name, Icon, tea.Accent); alert.FormClosed += delegate { alert = null; }; alert.Show();
+            alert = new AlertForm(tea.Name, Icon, tea.Accent, preferences.MascotKind, preferences.ShowMascot, preferences.AnimateMascot); alert.FormClosed += delegate { alert = null; }; alert.Show();
         }
         private void DismissAlert() { if (alert != null) { alert.Close(); alert = null; } }
         private void RestoreWindow() { Show(); WindowState = FormWindowState.Normal; Activate(); if (alert != null) alert.Activate(); }

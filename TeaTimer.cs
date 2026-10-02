@@ -192,19 +192,31 @@ namespace TeaTimer
 
     internal sealed class AlertForm : Form
     {
-        public AlertForm(string tea, Icon icon, Color accent = default(Color))
+        internal readonly ReminderMascot Mascot;
+        public AlertForm(string tea, Icon icon, Color accent = default(Color), int mascotKind = 0, bool showMascot = true, bool animateMascot = true)
         {
             SuspendLayout();
             if (accent.IsEmpty) accent = Style.Green;
             Text = "茶泡好了 · 一盏茶"; Icon = icon; TopMost = true; ShowInTaskbar = true;
-            ClientSize = new Size(280, 166); BackColor = Style.Blend(accent, Color.White, .06f); StartPosition = FormStartPosition.CenterScreen;
-            AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
+            AutoScaleMode = AutoScaleMode.None;
+            float scale; using (Graphics g = CreateGraphics()) scale = g.DpiY / 96f;
+            ClientSize = new Size((int)Math.Round((showMascot ? 300 : 280) * scale), (int)Math.Round(166 * scale)); BackColor = Style.Blend(accent, Color.White, .06f); StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
-            Label title = new Label { Text = "茶泡好了", Font = Style.Font(18, FontStyle.Bold), ForeColor = accent, TextAlign = ContentAlignment.MiddleCenter, Bounds = new Rectangle(20, 16, 240, 40) };
-            Label body = new Label { Text = tea + "已到时间，请及时出汤。", Font = Style.Font(9, FontStyle.Regular), ForeColor = Style.Muted, TextAlign = ContentAlignment.MiddleCenter, Bounds = new Rectangle(14, 60, 252, 32) };
-            ActionButton ok = new ActionButton("知道了，喝茶去", true) { Accent = accent, Bounds = new Rectangle(40, 112, 200, 36), DialogResult = DialogResult.OK };
+            Label title = new Label { Text = "茶泡好了", Font = Style.Font(18, FontStyle.Bold), ForeColor = accent, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(120, 20, 168, 40) : new Rectangle(20, 16, 240, 40) };
+            Label body = new Label { Text = tea + (showMascot ? "已到时间，\n请及时出汤。" : "已到时间，请及时出汤。"), Font = Style.Font(9, FontStyle.Regular), ForeColor = Style.Muted, TextAlign = ContentAlignment.MiddleCenter, Bounds = showMascot ? new Rectangle(120, 62, 168, 40) : new Rectangle(14, 60, 252, 32) };
+            ActionButton ok = new ActionButton("知道了，喝茶去", true) { Accent = accent, Bounds = new Rectangle(showMascot ? 50 : 40, 116, 200, 36), DialogResult = DialogResult.OK };
             ok.Click += delegate { Close(); }; Controls.Add(title); Controls.Add(body); Controls.Add(ok); AcceptButton = ok; CancelButton = ok;
-            AutoScaleDimensions = new SizeF(96, 96); ResumeLayout(false); PerformAutoScale();
+            if (showMascot)
+            {
+                Mascot = new ReminderMascot(mascotKind, accent, animateMascot) { Bounds = new Rectangle(6, 2, 112, 112) };
+                Controls.Add(Mascot);
+            }
+            foreach (Control child in Controls)
+            {
+                Rectangle b = child.Bounds;
+                child.Bounds = new Rectangle((int)Math.Round(b.X * scale), (int)Math.Round(b.Y * scale), (int)Math.Round(b.Width * scale), (int)Math.Round(b.Height * scale));
+            }
+            ResumeLayout(false);
         }
     }
 
@@ -255,7 +267,10 @@ namespace TeaTimer
                     Assert(uiRejected, "UI blocks zero");
                     form.TestNotifications = true; form.SetDuration(1); form.ToggleTimer(); now += 1000; form.Pump(); Application.DoEvents();
                     Assert(form.HasVisibleAlert, "actual completion alert");
+                    Assert(form.CurrentAlert.Mascot.Kind == 0 && form.CurrentAlert.Mascot.AnimationRunning, "default animated reminder role");
+                    ReminderMascot closedMascot = form.CurrentAlert.Mascot;
                     form.ResetTimer(); Assert(!form.HasVisibleAlert, "reset dismisses completion alert");
+                    Assert(closedMascot.IsDisposed, "closing reminder disposes animation control");
                     form.SelectTea(0);
                     using (SettingsForm settings = new SettingsForm(prefs, false))
                     {
@@ -282,7 +297,20 @@ namespace TeaTimer
                     }
                     form.CapturePreview(Path.Combine(directory, "preview-dragon.png"));
                     form.ToggleTimer(); now += 300; form.CapturePreview(Path.Combine(directory, "preview-dragon-brewing.png"));
-                    now += 89000; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-dragon-ready.png")); form.ResetTimer();
+                    now += 89000; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-dragon-ready.png"));
+                    Assert(form.CurrentAlert.Mascot.Kind == 2, "completion reminder follows chosen dragon role");
+                    Style.CaptureForm(form.CurrentAlert, Path.Combine(directory, "preview-alert-dragon.png")); form.ResetTimer();
+                    Preferences reminderSettings = Preferences.Load(Path.Combine(directory, "no-settings.xml"));
+                    reminderSettings.Times = (int[])prefs.Times.Clone(); reminderSettings.Times[1] = 1;
+                    reminderSettings.MascotKind = 1; reminderSettings.AnimateMascot = false;
+                    form.ApplySettings(reminderSettings); form.ToggleTimer(); now += 1000; form.Pump();
+                    Assert(form.CurrentAlert.Mascot.Kind == 1 && !form.CurrentAlert.Mascot.AnimationRunning, "reminder respects static selected role");
+                    form.ResetTimer(); reminderSettings.ShowMascot = false; form.ApplySettings(reminderSettings);
+                    form.ToggleTimer(); now += 1000; form.Pump();
+                    Assert(form.HasVisibleAlert && form.CurrentAlert.Mascot == null, "hiding mascot preserves completion reminder");
+                    Style.CaptureForm(form.CurrentAlert, Path.Combine(directory, "preview-alert-text.png")); form.ResetTimer();
+                    reminderSettings.ShowMascot = true; reminderSettings.AnimateMascot = true;
+                    reminderSettings.MascotKind = 2; reminderSettings.Times[1] = 89; form.ApplySettings(reminderSettings);
                     form.Size = form.MinimumSize; Application.DoEvents(); form.CapturePreview(Path.Combine(directory, "preview-minimum.png"));
                     Assert(form.Controls[form.Controls.Count - 1].Bottom <= form.ClientSize.Height, "minimum-size buttons fit");
                     form.ClientSize = new Size(660, 440); Application.DoEvents();
@@ -301,17 +329,17 @@ namespace TeaTimer
                 File.WriteAllText(legacyPath, "<Preferences><Selected>0</Selected><Times><int>60</int><int>180</int><int>150</int><int>120</int><int>240</int><int>240</int></Times><Sound>true</Sound><OnTop>true</OnTop></Preferences>");
                 Preferences legacy = Preferences.Load(legacyPath);
                 Assert(legacy.Times[0] == 60 && legacy.OnTop && legacy.WindowWidth == 280 && legacy.WindowHeight == 236, "old configuration migrates without losing times");
-                using (AlertForm alert = new AlertForm("绿茶", SystemIcons.Information))
+                for (int role = 0; role < MascotCatalog.Names.Length; role++)
                 {
-                    alert.Show(); Application.DoEvents();
-                    using (Bitmap bitmap = new Bitmap(alert.Width, alert.Height))
+                    using (AlertForm alert = new AlertForm("花草茶", SystemIcons.Information, Tea.All[5].Accent, role))
                     {
-                        using (Graphics actual = alert.CreateGraphics()) bitmap.SetResolution(actual.DpiX, actual.DpiY);
-                        alert.DrawToBitmap(bitmap, new Rectangle(0, 0, alert.Width, alert.Height)); bitmap.Save(Path.Combine(directory, "preview-alert.png"));
+                        alert.Show(); Application.DoEvents();
+                        foreach (Control child in alert.Controls)
+                            Assert(child.Right <= alert.ClientSize.Width && child.Bottom <= alert.ClientSize.Height, "reminder layout fits at current DPI");
+                        Style.CaptureForm(alert, Path.Combine(directory, "preview-alert-" + role + ".png")); alert.Close();
                     }
-                    alert.Close();
                 }
-                File.WriteAllText(report, "PASS: countdown, pause/resume, deadline boundary, single completion, repeat, sleep recovery, zero/max bounds, all 6 presets, UI transitions, alerts, configuration validation, active-timer preservation, resize layouts, persistence/reopening, legacy migration and renders.");
+                File.WriteAllText(report, "PASS: countdown, pause/resume, deadline boundary, single completion, repeat, sleep recovery, zero/max bounds, all 6 presets, UI transitions, alerts, selected reminder roles, static/hidden reminders, animation disposal, reminder DPI layouts, configuration validation, active-timer preservation, resize layouts, persistence/reopening, legacy migration and renders.");
             }
             catch (Exception e) { File.WriteAllText(report, "FAIL: " + e); Environment.ExitCode = 1; }
         }
