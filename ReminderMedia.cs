@@ -11,6 +11,7 @@ namespace TeaTimer
     {
         private Stream stream;
         internal Image Image { get; private set; }
+        internal Rectangle ContentBounds { get; private set; }
         private int[] frameEnds;
         internal int DurationMilliseconds { get { return frameEnds[frameEnds.Length - 1]; } }
         internal int FrameCount { get { return frameEnds.Length; } }
@@ -21,8 +22,12 @@ namespace TeaTimer
                 try { Load(MediaLibrary.OpenLocal(file, true)); }
                 catch (Exception e) { if (!MediaLibrary.IsMediaError(e)) throw; }
             }
-            if (Image == null) Load(Assembly.GetExecutingAssembly().GetManifestResourceStream(MediaCatalog.AnimationResource(kind,
-                style == MediaCatalog.CustomAnimation ? MediaCatalog.DefaultProfile(scene).AnimationStyle : style)));
+            if (Image == null)
+            {
+                Load(Assembly.GetExecutingAssembly().GetManifestResourceStream(MediaCatalog.AnimationResource(kind,
+                    style == MediaCatalog.CustomAnimation ? MediaCatalog.DefaultProfile(scene).AnimationStyle : style)));
+                ContentBounds = SpriteDrawing.AnimationBounds(Image, FrameCount);
+            }
         }
         internal ReminderClip(string file) { Load(MediaLibrary.OpenLocal(file, true)); }
         private void Load(Stream data)
@@ -32,6 +37,7 @@ namespace TeaTimer
             {
                 if (stream == null) throw new InvalidOperationException("缺少提醒动画素材。");
                 Image = System.Drawing.Image.FromStream(stream);
+                ContentBounds = new Rectangle(0, 0, Image.Width, Image.Height);
                 if (Image.RawFormat.Guid != ImageFormat.Gif.Guid || Image.Width > 2048 || Image.Height > 2048)
                     throw new InvalidOperationException("请选择宽高不超过 2048 像素的 GIF 动画。");
                 int count = Image.GetFrameCount(FrameDimension.Time);

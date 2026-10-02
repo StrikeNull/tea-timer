@@ -42,29 +42,40 @@ namespace TeaTimer
     internal sealed class MascotArtwork : IDisposable
     {
         private readonly Bitmap[] mascots = new Bitmap[MascotCatalog.Names.Length];
+        private readonly Bitmap[] idle = new Bitmap[MascotCatalog.Names.Length];
+        private readonly Rectangle[,] poseBounds = new Rectangle[3, 3];
+        private readonly Rectangle[] idleBounds = new Rectangle[3];
         public MascotArtwork()
         {
             string[] resources = MascotCatalog.Resources;
+            string[] idleResources = { "TeaTimer.IdleMaid", "TeaTimer.IdleGpt", "TeaTimer.IdleDragon" };
             for (int i = 0; i < resources.Length; i++)
+            {
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resources[i]))
                 using (Image source = Image.FromStream(stream)) mascots[i] = new Bitmap(source);
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(idleResources[i]))
+                using (Image source = Image.FromStream(stream)) idle[i] = new Bitmap(source);
+                idleBounds[i] = SpriteDrawing.AlphaBounds(idle[i], new Rectangle(0, 0, idle[i].Width, idle[i].Height));
+                int cell = mascots[i].Width / 3;
+                for (int pose = 0; pose < 3; pose++) poseBounds[i, pose] = SpriteDrawing.AlphaBounds(mascots[i], new Rectangle(pose * cell, 0, cell, mascots[i].Height));
+            }
         }
-        public void Dispose() { foreach (Bitmap mascot in mascots) mascot.Dispose(); }
+        public void Dispose() { foreach (Bitmap mascot in mascots) mascot.Dispose(); foreach (Bitmap sprite in idle) sprite.Dispose(); }
         public void Draw(Graphics g, RectangleF bounds, float scale, int kind, TimerState state, Color accent, bool animate, double phase)
         {
             float size = bounds.Height;
             bool moving = animate && state != TimerState.Paused;
             float bob = moving ? (float)Math.Sin(phase * 2.4) * 2 * scale : 0;
             float tilt = moving ? (float)Math.Sin(phase * 1.8) * (state == TimerState.Finished ? 2 : .7f) : 0;
-            int frame = state == TimerState.Running ? 1 : state == TimerState.Finished ? 2 : 0;
-            Bitmap mascot = mascots[Math.Max(0, Math.Min(mascots.Length - 1, kind))];
-            float drawWidth = size * mascot.Width / 3f / mascot.Height;
+            kind = Math.Max(0, Math.Min(mascots.Length - 1, kind));
+            int frame = state == TimerState.Running ? 1 : 0;
+            Bitmap mascot = state == TimerState.Ready ? idle[kind] : mascots[kind];
+            Rectangle content = state == TimerState.Ready ? idleBounds[kind] : poseBounds[kind, frame];
             float x = bounds.X, y = bounds.Y + bob;
             GraphicsState saved = g.Save();
             g.TranslateTransform(x + size / 2, y + size / 2); g.RotateTransform(tilt);
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            g.DrawImage(mascot, new RectangleF(-drawWidth / 2, -size / 2, drawWidth, size),
-                new RectangleF(frame * mascot.Width / 3f, 0, mascot.Width / 3f, mascot.Height), GraphicsUnit.Pixel);
+            SpriteDrawing.DrawFit(g, mascot, content, new RectangleF(-size / 2, -size / 2, size, size));
             g.Restore(saved);
             if (state == TimerState.Running)
             {
@@ -104,8 +115,8 @@ namespace TeaTimer
         internal ReminderMascot(int kind, Color color, bool animate, ReminderProfile profile = null, int scene = 0)
         {
             Kind = kind; accent = color;
-            started = Native.GetTickCount64();
             if (animate) clip = new ReminderClip(kind, profile == null ? 0 : profile.AnimationStyle, profile == null ? null : profile.AnimationFile, scene);
+            started = Native.GetTickCount64();
             SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
             animation.Tick += delegate
             {
@@ -125,9 +136,7 @@ namespace TeaTimer
             {
                 clip.SelectFrame(clip.FrameAt((long)(Native.GetTickCount64() - started)));
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                float factor = Math.Min(size / clip.Image.Width, size / clip.Image.Height);
-                float width = clip.Image.Width * factor, height = clip.Image.Height * factor;
-                g.DrawImage(clip.Image, new RectangleF((Width - width) / 2, (Height - height) / 2, width, height));
+                SpriteDrawing.DrawFit(g, clip.Image, clip.ContentBounds, new RectangleF((Width - size) / 2, (Height - size) / 2, size, size));
             }
             else artwork.Draw(g, new RectangleF((Width - size) / 2, (Height - size) / 2, size, size),
                 scale, Kind, TimerState.Finished, accent, false, 0);
@@ -152,6 +161,12 @@ namespace TeaTimer
         private ReminderClip interactionClip;
         private string interactionCaption;
         private long interactionStarted;
+        private Bitmap currentCharacter, lastCharacter, transitionFrom;
+        private long transitionStarted;
+        private TimerState drawnState;
+        private int drawnKind;
+        internal const int TransitionMilliseconds = 220;
+        internal bool TransitionActive { get { return transitionFrom != null; } }
         internal bool InteractionActive { get { return interactionCaption != null; } }
         internal bool HasInteractionClip { get { return interactionClip != null; } }
         public ClockPanel()
@@ -160,7 +175,7 @@ namespace TeaTimer
         }
         internal void PlayInteraction(ReminderProfile profile, string caption, int scene)
         {
-            StopInteraction(); interactionStarted = Clock(); interactionCaption = caption;
+            StopInteraction(); BeginTransition(); interactionStarted = Clock(); interactionCaption = caption;
             if (ShowMascot && AnimateMascot) interactionClip = new ReminderClip(MascotKind, profile.AnimationStyle, profile.AnimationFile, scene);
             Invalidate();
         }
@@ -168,12 +183,34 @@ namespace TeaTimer
         {
             if (InteractionActive && Clock() - interactionStarted >= (interactionClip == null ? 2400 : interactionClip.DurationMilliseconds)) StopInteraction();
         }
-        internal void StopInteraction()
+        private void ClearTransition() { if (transitionFrom != null) { transitionFrom.Dispose(); transitionFrom = null; } }
+        private void BeginTransition()
         {
+            ClearTransition(); if (!AnimateMascot || !ShowMascot) return;
+            if (lastCharacter != null) transitionFrom = new Bitmap(lastCharacter);
+            else
+            {
+                transitionFrom = new Bitmap(384, 384);
+                using (Graphics g = Graphics.FromImage(transitionFrom))
+                { g.Clear(Color.White); artwork.Draw(g, new RectangleF(0, 0, 384, 384), 1, MascotKind, TimerState.Ready, Tea.Accent, false, 0); }
+            }
+            transitionStarted = Clock(); drawnState = Countdown.State; drawnKind = MascotKind;
+        }
+        internal void StopInteraction(bool immediate = false)
+        {
+            if (immediate) ClearTransition(); else if (InteractionActive) BeginTransition();
             if (interactionClip != null) { interactionClip.Dispose(); interactionClip = null; }
             interactionCaption = null; Invalidate();
         }
-        protected override void Dispose(bool disposing) { if (disposing) { StopInteraction(); artwork.Dispose(); } base.Dispose(disposing); }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                StopInteraction(true); artwork.Dispose();
+                if (currentCharacter != null) currentCharacter.Dispose(); if (lastCharacter != null) lastCharacter.Dispose();
+            }
+            base.Dispose(disposing);
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -200,15 +237,31 @@ namespace TeaTimer
             if (ShowMascot)
             {
                 RectangleF bounds = new RectangleF(Width - mascotSize - 4 * scale, (Height - mascotSize) / 2 - 2 * scale, mascotSize, mascotSize);
-                if (interactionClip != null)
+                if (lastCharacter != null && (drawnState != Countdown.State || drawnKind != MascotKind)) BeginTransition();
+                if (!AnimateMascot) ClearTransition();
+                drawnState = Countdown.State; drawnKind = MascotKind;
+                if (currentCharacter == null) { currentCharacter = new Bitmap(384, 384); lastCharacter = new Bitmap(384, 384); }
+                using (Graphics character = Graphics.FromImage(currentCharacter))
                 {
-                    interactionClip.SelectFrame(interactionClip.FrameAt(Clock() - interactionStarted));
-                    float factor = Math.Min(bounds.Width / interactionClip.Image.Width, bounds.Height / interactionClip.Image.Height);
-                    float w = interactionClip.Image.Width * factor, h = interactionClip.Image.Height * factor;
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.DrawImage(interactionClip.Image, new RectangleF(bounds.X + (bounds.Width - w) / 2, bounds.Y + (bounds.Height - h) / 2, w, h));
+                    // Blend complete pictures so the previous pose also fades away.
+                    character.Clear(Color.White); character.SmoothingMode = SmoothingMode.AntiAlias;
+                    character.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    if (interactionClip != null)
+                    {
+                        interactionClip.SelectFrame(interactionClip.FrameAt(Clock() - interactionStarted));
+                        SpriteDrawing.DrawFit(character, interactionClip.Image, interactionClip.ContentBounds, new RectangleF(0, 0, 384, 384));
+                    }
+                    else artwork.Draw(character, new RectangleF(0, 0, 384, 384), 384 / Math.Max(1, mascotSize) * scale, MascotKind,
+                        Countdown.State, Tea.Accent, AnimateMascot, Clock == null ? 0 : Clock() / 1000.0);
                 }
-                else artwork.Draw(g, bounds, scale, MascotKind, Countdown.State, Tea.Accent, AnimateMascot, Clock == null ? 0 : Clock() / 1000.0);
+                float mix = transitionFrom == null ? 1 : Math.Min(1, Math.Max(0, (Clock() - transitionStarted) / (float)TransitionMilliseconds));
+                using (Graphics composite = Graphics.FromImage(lastCharacter))
+                {
+                    composite.Clear(Color.White); if (transitionFrom != null) composite.DrawImageUnscaled(transitionFrom, 0, 0);
+                    SpriteDrawing.DrawOpacity(composite, currentCharacter, new Rectangle(0, 0, 384, 384), mix);
+                }
+                if (mix >= 1) ClearTransition();
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.DrawImage(lastCharacter, bounds);
             }
             float progress = Math.Max(0, Math.Min(1, 1f - (float)Countdown.RemainingMilliseconds / (Countdown.DurationSeconds * 1000f)));
             RectangleF track = new RectangleF(14 * scale, Height - 12 * scale, textWidth - 28 * scale, 3 * scale);
@@ -240,6 +293,7 @@ namespace TeaTimer
         internal int LastInteractionScene { get; private set; }
         internal bool MainInteractionActive { get { return clockPanel.InteractionActive; } }
         internal bool MainHasInteractionClip { get { return clockPanel.HasInteractionClip; } }
+        internal bool MainTransitionActive { get { return clockPanel.TransitionActive; } }
         internal Countdown Model { get { return countdown; } }
         internal int BrewRound { get { return brewRound; } }
         internal AlertForm CurrentAlert { get { return alert; } }
@@ -286,7 +340,7 @@ namespace TeaTimer
             };
             VisibleChanged += delegate { if (!Visible) StopInteraction(); };
             FormClosed += delegate { StopInteraction(); timer.Stop(); timer.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); teaMenu.Dispose(); DismissAlert(); Icon.Dispose(); };
-            timer = new System.Windows.Forms.Timer { Interval = 100 }; timer.Tick += delegate { Pump(); };
+            timer = new System.Windows.Forms.Timer { Interval = 33 }; timer.Tick += delegate { Pump(); };
             TopMost = preferences.OnTop;
             ResumeLayout(false); LayoutControls(); SelectTea(preferences.Selected); timer.Start();
         }
@@ -308,7 +362,7 @@ namespace TeaTimer
         }
         private void StopInteraction()
         {
-            clockPanel.StopInteraction();
+            clockPanel.StopInteraction(!Visible);
             if (interactionSpeech != null) { interactionSpeech.Dispose(); interactionSpeech = null; }
         }
         private int Px(float value) { return (int)Math.Round(value * uiScale); }
@@ -412,7 +466,11 @@ namespace TeaTimer
         internal void Pump()
         {
             clockPanel.AdvanceInteraction(); if (countdown.Tick()) Completed(); clockPanel.Invalidate();
-            if (countdown.State == TimerState.Running) tray.Text = "一盏茶 · " + Tea.All[preferences.Selected].Name + " · 剩余 " + countdown.RemainingSeconds + " 秒";
+            if (countdown.State == TimerState.Running)
+            {
+                string text = "一盏茶 · " + Tea.All[preferences.Selected].Name + " · 剩余 " + countdown.RemainingSeconds + " 秒";
+                if (tray.Text != text) tray.Text = text;
+            }
         }
         private void UpdateState()
         {

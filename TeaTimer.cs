@@ -258,8 +258,15 @@ namespace TeaTimer
             {
                 form.Show(); Application.DoEvents();
                 Assert(form.InteractionCount == 1 && form.LastInteractionScene == 1 && form.MainHasInteractionClip, "startup plays greeting in main window once");
-                now += 250; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-today.png"));
+                Assert(form.MainTransitionActive, "startup greeting begins a transition");
+                now += 110; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-transition-half.png"));
+                Assert(form.MainTransitionActive, "transition remains active halfway through");
+                now += 140; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-today.png"));
+                Assert(!form.MainTransitionActive && form.MainInteractionActive, "transition finishes while greeting continues");
                 now += 3000; form.Pump(); Assert(!form.MainInteractionActive && form.Model.State == TimerState.Ready, "greeting finishes without starting timer");
+                Assert(form.MainTransitionActive, "greeting returns to idle with a transition");
+                now += 250; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-empty-idle.png"));
+                Assert(!form.MainTransitionActive, "return to idle releases transition picture");
                 form.Hide(); form.Show(); Application.DoEvents(); Assert(form.InteractionCount == 1, "restoring window does not repeat startup greeting");
                 form.ClickTeaPicker(); Application.DoEvents();
                 Assert(form.InteractionCount == 2 && form.LastInteractionScene == 1 && prefs.Selected == 0 && form.MainInteractionActive, "opening tea picker plays greeting before any selection");
@@ -268,6 +275,7 @@ namespace TeaTimer
                 form.SelectTea(1); Assert(form.InteractionCount == 2, "same tea selection does not duplicate greeting");
                 form.ToggleTimer(); Assert(form.InteractionCount == 3 && form.LastInteractionScene == 2 && form.Model.State == TimerState.Running, "start plays brewing interaction and starts countdown");
                 now += 300; form.Pump(); form.CapturePreview(Path.Combine(directory, "preview-brewing-interaction.png"));
+                Assert(!form.MainTransitionActive && form.MainInteractionActive, "rapid greeting to brewing switch settles without stopping animation");
                 form.ClickTeaPicker(); form.SelectTea(0); Assert(form.InteractionCount == 3 && prefs.Selected == 1, "disabled tea picker does not play during brew");
                 form.ToggleTimer(); Assert(!form.MainInteractionActive, "pause clears brewing interaction");
                 long remaining = form.Model.RemainingMilliseconds; now += 20000; form.ToggleTimer();
@@ -276,6 +284,7 @@ namespace TeaTimer
                 form.ClickTeaPicker(); form.CloseTeaPicker(); Assert(form.InteractionCount == 4 && !form.HasVisibleAlert && form.MainInteractionActive, "opening picker dismisses completion before greeting starts");
                 form.ToggleTimer(); Assert(form.InteractionCount == 5 && form.LastInteractionScene == 2 && form.BrewRound == 2 && form.Model.DurationSeconds == 8, "repeat shares brewing interaction and preserves round increment");
                 form.Hide(); Assert(!form.MainInteractionActive && !form.MainHasInteractionClip, "hiding releases interaction animation");
+                Assert(!form.MainTransitionActive, "hiding also releases transition picture");
                 form.Show(); Application.DoEvents(); Assert(form.InteractionCount == 5, "restore during brew does not replay interaction");
                 form.ResetTimer(); prefs.Greetings[2].Enabled = prefs.Brewing[2].Enabled = false;
                 form.ClickTeaPicker(); form.CloseTeaPicker(); form.SelectTea(0); form.ToggleTimer(); Assert(form.InteractionCount == 5 && !form.MainInteractionActive, "per-role interaction switches suppress playback");
@@ -285,6 +294,7 @@ namespace TeaTimer
                 Assert(form.MainInteractionActive && !form.MainHasInteractionClip, "hidden character respects global setting during interaction");
                 form.ResetTimer(); hidden.ShowMascot = true; hidden.AnimateMascot = false; form.ApplySettings(hidden); form.ToggleTimer();
                 Assert(form.MainInteractionActive && !form.MainHasInteractionClip, "disabled animation keeps static character during interaction");
+                Assert(!form.MainTransitionActive, "disabled animation suppresses transitions");
                 form.ShutdownTest();
             }
             using (ReminderSpeech today = new ReminderSpeech(6)) Assert(today.IsLoaded, "today voice loads");
