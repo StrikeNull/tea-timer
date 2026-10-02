@@ -24,7 +24,7 @@ namespace TeaTimer
     {
         internal const int CustomAnimation = 3, CustomVoice = 5;
         internal static readonly string[] ExtraActions = { "挥手迎茶", "俏皮眨眼", "摇尾招呼" };
-        internal static readonly string[] SceneNames = { "到时提醒", "启动 / 切换茶", "开始 / 再泡一杯" };
+        internal static readonly string[] SceneNames = { "到时提醒", "启动 / 点击选茶", "开始 / 再泡一杯" };
         internal static readonly string[] VoiceNames = { "清甜出汤", "活泼女仆", "温柔茶香", "俏皮催茶", "随机出汤语音", "自定义 WAV", "今天喝什么茶", "开始泡茶" };
         private static readonly Random random = new Random();
         internal static string AnimationResource(int role, int style)

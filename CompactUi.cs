@@ -223,6 +223,7 @@ namespace TeaTimer
         private readonly Preferences preferences;
         private readonly Countdown countdown;
         private readonly TeaPickerButton teaPicker;
+        private readonly ContextMenuStrip teaMenu;
         private readonly ClockPanel clockPanel;
         private readonly ActionButton start, reset, configure;
         private readonly NotifyIcon tray;
@@ -254,17 +255,13 @@ namespace TeaTimer
             ClientSize = new Size(Px(preferences.WindowWidth), Px(preferences.WindowHeight));
             MinimumSize = new Size(Px(260) + Width - ClientSize.Width, Px(208) + Height - ClientSize.Height);
             teaPicker = new TeaPickerButton { AccessibleName = "选择茶类" };
-            ContextMenuStrip teaMenu = new ContextMenuStrip();
+            teaMenu = new ContextMenuStrip();
             for (int i = 0; i < Tea.All.Length; i++)
             {
                 int index = i; ToolStripMenuItem choice = new ToolStripMenuItem(Tea.All[i].Name) { ForeColor = Tea.All[i].Accent };
                 choice.Click += delegate { SelectTea(index); }; teaMenu.Items.Add(choice);
             }
-            teaPicker.Click += delegate
-            {
-                for (int i = 0; i < teaMenu.Items.Count; i++) ((ToolStripMenuItem)teaMenu.Items[i]).Checked = i == preferences.Selected;
-                teaMenu.Show(teaPicker, new Point(0, teaPicker.Height));
-            };
+            teaPicker.Click += delegate { OpenTeaPicker(); };
             Controls.Add(teaPicker);
             configure = new ActionButton("配置", false); configure.Click += delegate { ShowConfiguration(); }; Controls.Add(configure);
             clockPanel = new ClockPanel { Countdown = countdown, Tea = Tea.All[preferences.Selected], Clock = now, ShowMascot = preferences.ShowMascot, AnimateMascot = preferences.AnimateMascot, MascotKind = preferences.MascotKind }; Controls.Add(clockPanel);
@@ -316,6 +313,15 @@ namespace TeaTimer
         }
         private int Px(float value) { return (int)Math.Round(value * uiScale); }
         private bool IsBusy { get { return countdown.State == TimerState.Running || countdown.State == TimerState.Paused; } }
+        private void OpenTeaPicker()
+        {
+            if (IsBusy || !Visible) return;
+            DismissAlert(); PlayInteraction(1);
+            for (int i = 0; i < teaMenu.Items.Count; i++) ((ToolStripMenuItem)teaMenu.Items[i]).Checked = i == preferences.Selected;
+            teaMenu.Show(teaPicker, new Point(0, teaPicker.Height));
+        }
+        internal void ClickTeaPicker() { teaPicker.PerformClick(); }
+        internal void CloseTeaPicker() { teaMenu.Close(); }
         private void LayoutControls()
         {
             if (clockPanel == null || start == null) return;
@@ -341,13 +347,10 @@ namespace TeaTimer
         internal void SelectTea(int index)
         {
             if (IsBusy || index < 0 || index >= Tea.All.Length) return;
-            bool changed = preferences.Selected != index;
-            if (changed) StopInteraction();
             DismissAlert(); preferences.Selected = index;
             teaPicker.Text = Tea.All[index].Name;
             brewRound = 1; clockPanel.Tea = Tea.All[index]; countdown.Reset(RoundDuration()); UpdateState(); SavePreferences();
             ApplyTheme();
-            if (changed && shownOnce) PlayInteraction(1);
         }
         private void ApplyTheme()
         {
