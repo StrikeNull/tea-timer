@@ -1,0 +1,9 @@
+/verification*/
+/dist/
+*.exe
+*.pdb
+*.tmp
+settings*.xml
+.vs/
+bin/
+obj/

@@ -1,0 +1,373 @@
+using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.IO;
+using System.Media;
+using System.Reflection;
+using System.Windows.Forms;
+
+namespace TeaTimer
+{
+    internal sealed class TeaPickerButton : Button
+    {
+        public Color Accent;
+        public TeaPickerButton()
+        {
+            FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; Cursor = Cursors.Hand;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; float scale = g.DpiY / 96f;
+            using (GraphicsPath path = Style.Rounded(new RectangleF(1, 1, Width - 3, Height - 3), 8 * scale))
+            using (Brush brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
+            Color ink = Enabled ? Accent : Style.Muted;
+            using (Brush brush = new SolidBrush(ink)) g.FillEllipse(brush, 12 * scale, (Height - 6 * scale) / 2, 6 * scale, 6 * scale);
+            Style.Text(g, Text, 10 * scale, FontStyle.Bold, ink, new RectangleF(27 * scale, 0, Width - 48 * scale, Height), StringAlignment.Near);
+            using (Pen pen = new Pen(ink, 1.4f * scale))
+            {
+                float x = Width - 15 * scale, y = Height / 2;
+                g.DrawLines(pen, new PointF[] { new PointF(x - 3 * scale, y - 1.5f * scale), new PointF(x, y + 1.5f * scale), new PointF(x + 3 * scale, y - 1.5f * scale) });
+            }
+            if (Focused) ControlPaint.DrawFocusRectangle(g, new Rectangle(5, 5, Width - 10, Height - 10));
+        }
+    }
+
+    internal sealed class ClockPanel : Control
+    {
+        public Countdown Countdown;
+        public Tea Tea;
+        public bool ShowMascot = true, AnimateMascot = true;
+        public int MascotKind;
+        public Func<long> Clock;
+        private readonly Bitmap[] mascots = new Bitmap[2];
+        public ClockPanel()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+            string[] resources = { "TeaTimer.TeaMaid", "TeaTimer.GptMaid" };
+            for (int i = 0; i < resources.Length; i++)
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resources[i]))
+                using (Image source = Image.FromStream(stream)) mascots[i] = new Bitmap(source);
+        }
+        protected override void Dispose(bool disposing) { if (disposing) foreach (Bitmap mascot in mascots) mascot.Dispose(); base.Dispose(disposing); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+            float scale = g.DpiY / 96f;
+            using (GraphicsPath path = Style.Rounded(new RectangleF(1, 1, Width - 3, Height - 3), 12 * scale))
+            using (Brush brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
+            int seconds = Countdown.RemainingSeconds;
+            string time = (seconds / 60).ToString("00") + ":" + (seconds % 60).ToString("00");
+            float mascotSize = Math.Min(Height * .84f, 136 * scale);
+            float textWidth = ShowMascot ? Width - mascotSize - 14 * scale : Width;
+            float fontSize = Math.Min(78 * scale, Math.Min(textWidth * .26f, Height * .40f));
+            using (Font font = new Font("Segoe UI", fontSize, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (Brush brush = new SolidBrush(Style.Blend(Tea.Accent, Color.Black, .55f))) using (StringFormat sf = new StringFormat())
+            {
+                sf.Alignment = StringAlignment.Center; sf.LineAlignment = StringAlignment.Center;
+                g.DrawString(time, font, brush, new RectangleF(0, Height * .04f, textWidth, Height * .62f), sf);
+            }
+            string state = Countdown.State == TimerState.Running ? "正在泡茶" : Countdown.State == TimerState.Paused ? "已暂停" : Countdown.State == TimerState.Finished ? "茶泡好了，请及时出汤" : "点击开始泡茶";
+            Style.Text(g, state, 9 * scale, FontStyle.Regular, Tea.Accent,
+                new RectangleF(0, Height * .66f, textWidth, 22 * scale), StringAlignment.Center);
+            if (ShowMascot) DrawMascot(g, scale, mascotSize);
+            float progress = Math.Max(0, Math.Min(1, 1f - (float)Countdown.RemainingMilliseconds / (Countdown.DurationSeconds * 1000f)));
+            RectangleF track = new RectangleF(14 * scale, Height - 12 * scale, Width - 28 * scale, 3 * scale);
+            using (Brush brush = new SolidBrush(ColorTranslator.FromHtml("#E9EEE5"))) g.FillRectangle(brush, track);
+            if (progress > 0) using (Brush brush = new SolidBrush(Tea.Accent))
+                g.FillRectangle(brush, track.X, track.Y, track.Width * progress, track.Height);
+        }
+        private void DrawMascot(Graphics g, float scale, float size)
+        {
+            bool moving = AnimateMascot && Countdown.State != TimerState.Paused;
+            double phase = Clock == null ? 0 : Clock() / 1000.0;
+            float bob = moving ? (float)Math.Sin(phase * 2.4) * 2 * scale : 0;
+            float tilt = moving ? (float)Math.Sin(phase * 1.8) * (Countdown.State == TimerState.Finished ? 2 : .7f) : 0;
+            int frame = Countdown.State == TimerState.Running ? 1 : Countdown.State == TimerState.Finished ? 2 : 0;
+            Bitmap mascot = mascots[MascotKind == 1 ? 1 : 0];
+            float drawWidth = size * mascot.Width / 3f / mascot.Height;
+            float x = Width - size - 8 * scale, y = (Height - size) / 2 - 3 * scale + bob;
+            GraphicsState saved = g.Save();
+            g.TranslateTransform(x + size / 2, y + size / 2); g.RotateTransform(tilt);
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(mascot, new RectangleF(-drawWidth / 2, -size / 2, drawWidth, size),
+                new RectangleF(frame * mascot.Width / 3f, 0, mascot.Width / 3f, mascot.Height), GraphicsUnit.Pixel);
+            g.Restore(saved);
+            if (Countdown.State == TimerState.Running)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    float rise = moving ? (float)((phase * .50 + i * .33) % 1) : .45f;
+                    int alpha = (int)((1 - rise) * 120);
+                    float steamX = x + size * (.40f + i * .055f), steamY = y + size * .53f - rise * size * .20f;
+                    using (Pen pen = new Pen(Color.FromArgb(alpha, Tea.Accent), 1.2f * scale))
+                        g.DrawBezier(pen, steamX, steamY, steamX - 3 * scale, steamY - 3 * scale, steamX + 3 * scale, steamY - 6 * scale, steamX, steamY - 9 * scale);
+                }
+            }
+            if (Countdown.State == TimerState.Finished)
+            {
+                float pulse = moving ? .7f + .3f * (float)Math.Sin(phase * 3) : 1;
+                DrawSparkle(g, Tea.Accent, x + size * .12f, y + size * .22f, 4 * scale * pulse);
+                DrawSparkle(g, Tea.Accent, x + size * .90f, y + size * .09f, 3 * scale * pulse);
+            }
+        }
+        private void DrawSparkle(Graphics g, Color color, float x, float y, float radius)
+        {
+            using (Brush brush = new SolidBrush(color))
+                g.FillPolygon(brush, new PointF[] { new PointF(x, y - radius), new PointF(x + radius * .35f, y - radius * .35f), new PointF(x + radius, y), new PointF(x + radius * .35f, y + radius * .35f), new PointF(x, y + radius), new PointF(x - radius * .35f, y + radius * .35f), new PointF(x - radius, y), new PointF(x - radius * .35f, y - radius * .35f) });
+        }
+    }
+
+    internal sealed class TeaForm : Form
+    {
+        private readonly Preferences preferences;
+        private readonly Countdown countdown;
+        private readonly TeaPickerButton teaPicker;
+        private readonly ClockPanel clockPanel;
+        private readonly ActionButton start, reset, configure;
+        private readonly NotifyIcon tray;
+        private readonly System.Windows.Forms.Timer timer;
+        private AlertForm alert;
+        private bool exiting;
+        private readonly float uiScale;
+        internal int CompletionCount { get; private set; }
+        internal bool SilentTest, TestNotifications;
+        internal Countdown Model { get { return countdown; } }
+        internal bool HasVisibleAlert { get { return alert != null && alert.Visible && alert.TopMost; } }
+        internal TeaForm(Preferences prefs, Func<long> now, bool silentTest = false)
+        {
+            SuspendLayout(); SilentTest = silentTest; preferences = prefs;
+            countdown = new Countdown(now);
+            Text = "一盏茶"; Icon = Style.MakeIcon(); BackColor = Style.Background; ForeColor = Style.Ink;
+            Font = Style.Font(9, FontStyle.Regular); AutoScaleMode = AutoScaleMode.None;
+            FormBorderStyle = FormBorderStyle.Sizable; StartPosition = FormStartPosition.CenterScreen; DoubleBuffered = true;
+            using (Graphics g = CreateGraphics()) uiScale = g.DpiY / 96f;
+            ClientSize = new Size(Px(preferences.WindowWidth), Px(preferences.WindowHeight));
+            MinimumSize = new Size(Px(260) + Width - ClientSize.Width, Px(208) + Height - ClientSize.Height);
+            teaPicker = new TeaPickerButton { AccessibleName = "选择茶类" };
+            ContextMenuStrip teaMenu = new ContextMenuStrip();
+            for (int i = 0; i < Tea.All.Length; i++)
+            {
+                int index = i; ToolStripMenuItem choice = new ToolStripMenuItem(Tea.All[i].Name) { ForeColor = Tea.All[i].Accent };
+                choice.Click += delegate { SelectTea(index); }; teaMenu.Items.Add(choice);
+            }
+            teaPicker.Click += delegate
+            {
+                for (int i = 0; i < teaMenu.Items.Count; i++) ((ToolStripMenuItem)teaMenu.Items[i]).Checked = i == preferences.Selected;
+                teaMenu.Show(teaPicker, new Point(0, teaPicker.Height));
+            };
+            Controls.Add(teaPicker);
+            configure = new ActionButton("配置", false); configure.Click += delegate { ShowConfiguration(); }; Controls.Add(configure);
+            clockPanel = new ClockPanel { Countdown = countdown, Tea = Tea.All[preferences.Selected], Clock = now, ShowMascot = preferences.ShowMascot, AnimateMascot = preferences.AnimateMascot, MascotKind = preferences.MascotKind }; Controls.Add(clockPanel);
+            start = new ActionButton("开始泡茶", true); start.Font = Style.Font(10, FontStyle.Bold);
+            start.Click += delegate { ToggleTimer(); }; Controls.Add(start);
+            reset = new ActionButton("重置", false); reset.Click += delegate { ResetTimer(); }; Controls.Add(reset);
+            ContextMenuStrip menu = new ContextMenuStrip(); menu.Items.Add("打开一盏茶", null, delegate { RestoreWindow(); });
+            menu.Items.Add("配置", null, delegate { RestoreWindow(); ShowConfiguration(); });
+            menu.Items.Add("退出（停止计时）", null, delegate { exiting = true; Close(); });
+            tray = new NotifyIcon { Icon = Icon, Text = "一盏茶 · 泡茶计时", ContextMenuStrip = menu, Visible = !silentTest };
+            tray.DoubleClick += delegate { RestoreWindow(); }; tray.BalloonTipClicked += delegate { RestoreWindow(); };
+            Resize += delegate { LayoutControls(); if (WindowState == FormWindowState.Minimized) Hide(); };
+            ResizeEnd += delegate { RememberWindowSize(); SavePreferences(); };
+            FormClosing += delegate(object sender, FormClosingEventArgs e)
+            {
+                RememberWindowSize(); SavePreferences();
+                if (!exiting && (IsBusy || alert != null))
+                {
+                    e.Cancel = true; Hide();
+                    if (!SilentTest) tray.ShowBalloonTip(3000, "一盏茶仍在后台", "计时和提醒继续。双击托盘茶杯打开，右键可退出。", ToolTipIcon.Info);
+                }
+            };
+            FormClosed += delegate { timer.Stop(); timer.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); teaMenu.Dispose(); DismissAlert(); Icon.Dispose(); };
+            timer = new System.Windows.Forms.Timer { Interval = 100 }; timer.Tick += delegate { Pump(); };
+            TopMost = preferences.OnTop;
+            ResumeLayout(false); LayoutControls(); SelectTea(preferences.Selected); timer.Start();
+        }
+        private int Px(float value) { return (int)Math.Round(value * uiScale); }
+        private bool IsBusy { get { return countdown.State == TimerState.Running || countdown.State == TimerState.Paused; } }
+        private void LayoutControls()
+        {
+            if (clockPanel == null || start == null) return;
+            int inset = Px(12), gap = Px(8), configWidth = Px(58), rowHeight = Px(32), buttonHeight = Px(40);
+            teaPicker.SetBounds(inset, inset + Px(2), Math.Max(1, ClientSize.Width - inset * 2 - configWidth - gap), rowHeight);
+            configure.SetBounds(ClientSize.Width - inset - configWidth, inset, configWidth, rowHeight);
+            int bottom = ClientSize.Height - inset - buttonHeight, clockTop = inset + rowHeight + gap;
+            clockPanel.SetBounds(inset, clockTop, ClientSize.Width - inset * 2, Math.Max(Px(80), bottom - gap - clockTop));
+            int resetWidth = Px(66);
+            start.SetBounds(inset, bottom, ClientSize.Width - inset * 2 - resetWidth - gap, buttonHeight);
+            reset.SetBounds(ClientSize.Width - inset - resetWidth, bottom, resetWidth, buttonHeight);
+        }
+        internal void RememberWindowSize()
+        {
+            if (WindowState != FormWindowState.Normal) return;
+            preferences.WindowWidth = Math.Max(260, Math.Min(1280, (int)Math.Round(ClientSize.Width / uiScale)));
+            preferences.WindowHeight = Math.Max(208, Math.Min(960, (int)Math.Round(ClientSize.Height / uiScale)));
+        }
+        private void SavePreferences()
+        {
+            if (!SilentTest) Text = preferences.Save() ? "一盏茶" : "一盏茶 · 设置未保存";
+        }
+        internal void SelectTea(int index)
+        {
+            if (IsBusy || index < 0 || index >= Tea.All.Length) return;
+            DismissAlert(); preferences.Selected = index;
+            teaPicker.Text = Tea.All[index].Name;
+            clockPanel.Tea = Tea.All[index]; countdown.Reset(preferences.Times[index]); UpdateState(); SavePreferences();
+            ApplyTheme();
+        }
+        private void ApplyTheme()
+        {
+            Color accent = Tea.All[preferences.Selected].Accent;
+            BackColor = Style.Blend(accent, Color.White, .075f);
+            start.Accent = reset.Accent = configure.Accent = teaPicker.Accent = accent;
+            Icon previous = Icon; Icon = Style.MakeIcon(accent); tray.Icon = Icon; previous.Dispose();
+            Invalidate(true);
+        }
+        internal void SetDuration(int duration)
+        {
+            if (duration < 1 || duration > 5999) throw new ArgumentOutOfRangeException("duration");
+            if (IsBusy) return;
+            DismissAlert(); preferences.Times[preferences.Selected] = duration; countdown.Reset(duration); UpdateState(); SavePreferences();
+        }
+        private void ShowConfiguration()
+        {
+            using (SettingsForm settings = new SettingsForm(preferences, IsBusy))
+                if (settings.ShowDialog(this) == DialogResult.OK) ApplySettings(settings.Result);
+        }
+        internal void ApplySettings(Preferences result)
+        {
+            preferences.Times = (int[])result.Times.Clone(); preferences.Sound = result.Sound; preferences.OnTop = result.OnTop;
+            preferences.ShowMascot = result.ShowMascot; preferences.AnimateMascot = result.AnimateMascot;
+            preferences.MascotKind = result.MascotKind;
+            clockPanel.ShowMascot = preferences.ShowMascot; clockPanel.AnimateMascot = preferences.AnimateMascot;
+            clockPanel.MascotKind = preferences.MascotKind;
+            TopMost = preferences.OnTop;
+            // A running or paused brew keeps its original deadline. New durations
+            // apply to the next brew, including repeating after completion.
+            if (!IsBusy) { DismissAlert(); countdown.Reset(preferences.Times[preferences.Selected]); }
+            UpdateState(); SavePreferences();
+        }
+        internal void ToggleTimer()
+        {
+            if (countdown.State == TimerState.Running) { if (countdown.Pause()) Completed(); }
+            else
+            {
+                DismissAlert();
+                if (countdown.State != TimerState.Paused) countdown.Reset(preferences.Times[preferences.Selected]);
+                countdown.Start();
+            }
+            UpdateState();
+        }
+        internal void ResetTimer()
+        { DismissAlert(); countdown.Reset(preferences.Times[preferences.Selected]); UpdateState(); }
+        internal void Pump()
+        {
+            if (countdown.Tick()) Completed(); clockPanel.Invalidate();
+            if (countdown.State == TimerState.Running) tray.Text = "一盏茶 · " + Tea.All[preferences.Selected].Name + " · 剩余 " + countdown.RemainingSeconds + " 秒";
+        }
+        private void UpdateState()
+        {
+            teaPicker.Enabled = !IsBusy;
+            start.Text = countdown.State == TimerState.Running ? "暂停" : countdown.State == TimerState.Paused ? "继续" : countdown.State == TimerState.Finished ? "再泡一杯" : "开始泡茶";
+            tray.Text = "一盏茶 · " + (countdown.State == TimerState.Paused ? "已暂停" : "泡茶计时"); clockPanel.Invalidate();
+        }
+        private void Completed()
+        {
+            CompletionCount++; UpdateState(); if (SilentTest && !TestNotifications) return;
+            Tea tea = Tea.All[preferences.Selected];
+            if (preferences.Sound && !SilentTest) SystemSounds.Exclamation.Play();
+            if (!SilentTest) tray.ShowBalloonTip(6000, "茶泡好了", tea.Name + "已到时间，请及时出汤。", ToolTipIcon.Info);
+            alert = new AlertForm(tea.Name, Icon, tea.Accent); alert.FormClosed += delegate { alert = null; }; alert.Show();
+        }
+        private void DismissAlert() { if (alert != null) { alert.Close(); alert = null; } }
+        private void RestoreWindow() { Show(); WindowState = FormWindowState.Normal; Activate(); if (alert != null) alert.Activate(); }
+        internal void ShutdownTest() { exiting = true; Close(); }
+        internal void CapturePreview(string path)
+        {
+            Style.CaptureForm(this, path);
+        }
+    }
+
+    internal sealed class SettingsForm : Form
+    {
+        private readonly Preferences original;
+        private readonly NumericUpDown[] minutes = new NumericUpDown[6], seconds = new NumericUpDown[6];
+        private readonly CheckBox sound, onTop, showMascot, animateMascot;
+        private readonly RadioButton whale, gpt;
+        private readonly Label status;
+        internal Preferences Result { get; private set; }
+        internal SettingsForm(Preferences preferences, bool busy)
+        {
+            SuspendLayout(); original = preferences;
+            Text = "配置 · 一盏茶"; BackColor = Style.Background; ForeColor = Style.Ink; Font = Style.Font(9, FontStyle.Regular);
+            FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
+            ShowInTaskbar = false; StartPosition = FormStartPosition.CenterParent; TopMost = preferences.OnTop;
+            AutoScaleMode = AutoScaleMode.None; ClientSize = new Size(370, 508);
+            AddLabel("泡茶配置", 20, 14, 330, 36, 16, FontStyle.Bold);
+            AddLabel("每种茶的时间分别保存，下次打开仍保留。", 20, 50, 330, 26, 8.5f, FontStyle.Regular);
+            AddLabel("茶类", 22, 82, 90, 25, 9, FontStyle.Bold);
+            AddLabel("分钟", 126, 82, 70, 25, 9, FontStyle.Bold);
+            AddLabel("秒钟", 210, 82, 70, 25, 9, FontStyle.Bold);
+            for (int i = 0; i < Tea.All.Length; i++)
+            {
+                int index = i, y = 112 + i * 30;
+                AddLabel(Tea.All[i].Name, 22, y, 92, 27, 9, FontStyle.Regular);
+                minutes[i] = MakeNumber(126, y, 99, preferences.Times[i] / 60, Tea.All[i].Name + "分钟");
+                seconds[i] = MakeNumber(210, y, 59, preferences.Times[i] % 60, Tea.All[i].Name + "秒钟");
+                ActionButton recommended = new ActionButton("推荐", false); recommended.SetBounds(294, y, 56, 27);
+                recommended.Font = Style.Font(8, FontStyle.Regular);
+                recommended.Click += delegate { SetTime(index, Tea.All[index].Seconds); }; Controls.Add(recommended);
+            }
+            sound = new CheckBox { Text = "提示音", Checked = preferences.Sound, AutoSize = true, Location = new Point(22, 308) };
+            onTop = new CheckBox { Text = "主窗口置顶", Checked = preferences.OnTop, AutoSize = true, Location = new Point(134, 308) };
+            Controls.Add(sound); Controls.Add(onTop);
+            showMascot = new CheckBox { Text = "显示泡茶娘", Checked = preferences.ShowMascot, AutoSize = true, Location = new Point(22, 338) };
+            animateMascot = new CheckBox { Text = "播放动画", Checked = preferences.AnimateMascot, Enabled = preferences.ShowMascot, AutoSize = true, Location = new Point(180, 338) };
+            showMascot.CheckedChanged += delegate { animateMascot.Enabled = showMascot.Checked; };
+            Controls.Add(showMascot); Controls.Add(animateMascot);
+            AddLabel("形象", 22, 367, 48, 25, 9, FontStyle.Bold);
+            whale = new RadioButton { Text = "蓝鲸女仆", Checked = preferences.MascotKind == 0, AutoSize = true, Location = new Point(82, 369) };
+            gpt = new RadioButton { Text = "GPT 茶娘（原创）", Checked = preferences.MascotKind == 1, AutoSize = true, Location = new Point(216, 369) };
+            Controls.Add(whale); Controls.Add(gpt);
+            AddLabel("杯泡参考，盖碗 / 功夫泡请自定义短时间。", 22, 398, 330, 25, 8, FontStyle.Regular);
+            status = AddLabel(busy ? "正在计时：时间修改在下一次泡茶生效。" : "时间范围：1 秒至 99 分 59 秒。", 22, 422, 330, 27, 8, FontStyle.Regular);
+            ActionButton save = new ActionButton("保存", true); save.SetBounds(20, 462, 214, 34);
+            save.Click += delegate { if (SaveChanges()) { DialogResult = DialogResult.OK; Close(); } }; Controls.Add(save);
+            ActionButton cancel = new ActionButton("取消", false); cancel.SetBounds(246, 462, 104, 34); cancel.DialogResult = DialogResult.Cancel;
+            cancel.Click += delegate { Close(); }; Controls.Add(cancel); AcceptButton = save; CancelButton = cancel;
+            float scale; using (Graphics graphics = CreateGraphics()) scale = graphics.DpiY / 96f;
+            foreach (Control control in Controls)
+            {
+                Rectangle bounds = control.Bounds;
+                if (control.AutoSize) control.Location = new Point((int)Math.Round(bounds.X * scale), (int)Math.Round(bounds.Y * scale));
+                else control.SetBounds((int)Math.Round(bounds.X * scale), (int)Math.Round(bounds.Y * scale), (int)Math.Round(bounds.Width * scale), (int)Math.Round(bounds.Height * scale));
+            }
+            ClientSize = new Size((int)Math.Round(370 * scale), (int)Math.Round(508 * scale));
+            ResumeLayout(false);
+        }
+        private Label AddLabel(string text, int x, int y, int width, int height, float size, FontStyle fontStyle)
+        {
+            Label label = new Label { Text = text, Font = Style.Font(size, fontStyle), ForeColor = fontStyle == FontStyle.Bold ? Style.Ink : Style.Muted, TextAlign = ContentAlignment.MiddleLeft };
+            label.SetBounds(x, y, width, height); Controls.Add(label); return label;
+        }
+        private NumericUpDown MakeNumber(int x, int y, int maximum, int value, string accessibleName)
+        {
+            NumericUpDown input = new NumericUpDown { Minimum = 0, Maximum = maximum, Value = value, Font = Style.Font(10, FontStyle.Regular), TextAlign = HorizontalAlignment.Center, AccessibleName = accessibleName };
+            input.SetBounds(x, y, 68, 27); Controls.Add(input); return input;
+        }
+        internal void SetTime(int index, int duration) { minutes[index].Value = duration / 60; seconds[index].Value = duration % 60; }
+        internal void ChooseMascot(int kind) { if (kind == 1) gpt.Checked = true; else whale.Checked = true; }
+        internal bool SaveChanges()
+        {
+            int[] times = new int[Tea.All.Length];
+            for (int i = 0; i < times.Length; i++)
+            {
+                times[i] = (int)minutes[i].Value * 60 + (int)seconds[i].Value;
+                if (times[i] == 0) { status.Text = Tea.All[i].Name + "的时间需要大于 0 秒。"; status.ForeColor = Color.Firebrick; minutes[i].Focus(); return false; }
+            }
+            Result = new Preferences { Selected = original.Selected, Times = times, Sound = sound.Checked, OnTop = onTop.Checked, ShowMascot = showMascot.Checked, AnimateMascot = animateMascot.Checked, MascotKind = gpt.Checked ? 1 : 0, WindowWidth = original.WindowWidth, WindowHeight = original.WindowHeight };
+            return true;
+        }
+        internal void CapturePreview(string path) { Style.CaptureForm(this, path); }
+    }
+}
