@@ -1,0 +1,156 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "tea_brewing_maid_first.png"
+    }
+  },
+  "6": {
+    "class_type": "MiniMaxH3ImageToVideo",
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "prompt": "A fixed camera, full body 2D anime sticker animation of the exact blue-haired chibi whale maid wearing a navy blue and white frilled maid dress, whale headband and small whale tail from the first reference frame. Keep her face, clothes, proportions and accessories unchanged. She is beginning to brew tea. Preserve the exact two-handed pouring pose and the same single teapot and single cup from the reference. Her right hand firmly grips the teapot handle, her left hand steadily supports the cup below the spout. A single narrow continuous stream flows from the spout directly into the cup. She gently blinks once and looks down at the cup with a small smile. A tiny amount of steam rises above the cup. Keep both vessels stable, their size constant and their hands attached. Keep her entire body and feet still, her tail and wings still. No cup lifting, no drinking, no waving, no toasting, no floating utensils, no extra arms or hands. Only the flowing liquid, tiny steam and one blink move. Finish in the original pouring pose for a smooth transition to the timer's brewing state. Her hair and skirt move subtly. Smooth natural character motion, no camera motion or zoom, no text, no additional characters, no scene change. Entire character remains inside frame. Background stays a perfectly flat pure bright chroma green RGB 0,255,0, without gradients, shadows or props. The character retains her original colors without green reflections. Silent animation. Finish in a calm steady pose.",
+      "width": 384,
+      "height": 384,
+      "length": 56,
+      "first_frame": [
+        "4",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "MiniMaxLowVRAMAttention",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "head_chunks": 4
+    }
+  },
+  "9": {
+    "class_type": "MiniMaxChunkFeedForward",
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "chunks": 4,
+      "seq_threshold": 4096
+    }
+  },
+  "10": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "9",
+        0
+      ],
+      "conditioning": [
+        "6",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 2026100302
+    }
+  },
+  "12": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "res_multistep"
+    }
+  },
+  "13": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "9",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 20,
+      "denoise": 1.0
+    }
+  },
+  "14": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "11",
+        0
+      ],
+      "guider": [
+        "10",
+        0
+      ],
+      "sampler": [
+        "12",
+        0
+      ],
+      "sigmas": [
+        "13",
+        0
+      ],
+      "latent_image": [
+        "6",
+        1
+      ]
+    }
+  },
+  "15": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "14",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "16": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "15",
+        0
+      ],
+      "filename_prefix": "tea_timer/brewing_maid"
+    }
+  }
+}

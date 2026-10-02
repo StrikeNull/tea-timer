@@ -81,6 +81,7 @@ namespace TeaTimer
         public ReminderProfile[] Reminders = { new ReminderProfile(), new ReminderProfile(), new ReminderProfile() };
         public ReminderProfile[] Greetings = MediaCatalog.CopyProfiles(null, 1);
         public ReminderProfile[] Brewing = MediaCatalog.CopyProfiles(null, 2);
+        public int BrewingAnimationVersion;
         public int WindowWidth = 280;
         public int WindowHeight = 236;
         public static string FilePath { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YiZhanCha", "settings.xml"); } }
@@ -102,6 +103,12 @@ namespace TeaTimer
                     p.Reminders = MediaCatalog.CopyProfiles(p.Reminders);
                     p.Greetings = MediaCatalog.CopyProfiles(p.Greetings, 1);
                     p.Brewing = MediaCatalog.CopyProfiles(p.Brewing, 2);
+                    if (p.BrewingAnimationVersion < 1)
+                    {
+                        foreach (ReminderProfile profile in p.Brewing)
+                            if (profile.AnimationStyle == 0) profile.AnimationStyle = MediaCatalog.BrewingAnimation;
+                        p.BrewingAnimationVersion = 1;
+                    }
                     return p;
                 }
             }
@@ -114,6 +121,7 @@ namespace TeaTimer
             try
             {
                 path = path ?? FilePath;
+                BrewingAnimationVersion = 1;
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 string temporary = path + ".tmp";
                 using (FileStream stream = File.Create(temporary)) new XmlSerializer(typeof(Preferences)).Serialize(stream, this);
@@ -343,8 +351,10 @@ namespace TeaTimer
             {
                 editor.ChooseScene(1); editor.RestoreDefault(true); editor.RestoreDefault(false);
                 editor.ChooseScene(2); editor.RestoreDefault(true); editor.RestoreDefault(false); Assert(editor.ApplyChanges(), "scene defaults restore");
-                Assert(editor.GreetingResult[2].AnimationStyle == 1 && editor.GreetingResult[2].VoiceStyle == 6 && editor.BrewingResult[2].VoiceStyle == 7, "restore uses correct scene defaults");
+                Assert(editor.GreetingResult[2].AnimationStyle == 1 && editor.GreetingResult[2].VoiceStyle == 6
+                    && editor.BrewingResult[2].AnimationStyle == MediaCatalog.BrewingAnimation && editor.BrewingResult[2].VoiceStyle == 7, "restore uses correct scene defaults");
                 editor.Show(); editor.ChooseScene(1); Application.DoEvents(); editor.CapturePreview(Path.Combine(directory, "preview-greeting-settings.png"));
+                editor.ChooseScene(2); Application.DoEvents(); editor.CapturePreview(Path.Combine(directory, "preview-brewing-settings.png"));
                 foreach (Control control in editor.Controls) Assert(control.Right <= editor.ClientSize.Width && control.Bottom <= editor.ClientSize.Height, "scene editor fits current DPI"); editor.Close();
             }
             using (ReminderSpeech fallback = new ReminderSpeech(MediaCatalog.CustomVoice, Path.Combine(sourceDir, "missing.wav"), 1))
@@ -498,9 +508,38 @@ namespace TeaTimer
                 Assert(legacy.VoiceReminder, "legacy settings enable voice option");
                 Assert(legacy.Reminders.Length == 3 && legacy.Reminders[2].AnimationStyle == 0 && legacy.Reminders[2].VoiceStyle == 0, "legacy settings keep original media defaults");
                 Assert(legacy.Greetings.Length == 3 && legacy.Greetings[2].VoiceStyle == 6 && legacy.Brewing[2].VoiceStyle == 7, "legacy settings acquire appropriate interaction defaults");
+                Assert(legacy.Brewing[2].AnimationStyle == MediaCatalog.BrewingAnimation, "legacy settings default to pouring for start and repeat");
+                string oldInteractionPath = Path.Combine(directory, "old-interaction-settings.xml");
+                Preferences oldInteractions = new Preferences { Selected = 1, Sound = false };
+                oldInteractions.Times[1] = 69; oldInteractions.RoundIncrements[1] = 7;
+                oldInteractions.Brewing[0].AnimationStyle = 0;
+                oldInteractions.Brewing[1].AnimationStyle = MediaCatalog.CustomAnimation;
+                oldInteractions.Brewing[1].AnimationFile = "keep.gif"; oldInteractions.Brewing[1].VoiceStyle = MediaCatalog.CustomVoice;
+                oldInteractions.Brewing[1].VoiceFile = "keep.wav";
+                oldInteractions.Brewing[2].AnimationStyle = 1; oldInteractions.Brewing[2].Enabled = false;
+                oldInteractions.Reminders[0].AnimationStyle = 1;
+                Assert(oldInteractions.Save(oldInteractionPath), "write legacy interaction fixture");
+                File.WriteAllText(oldInteractionPath, File.ReadAllText(oldInteractionPath).Replace("<BrewingAnimationVersion>1</BrewingAnimationVersion>", ""));
+                Preferences migrated = Preferences.Load(oldInteractionPath);
+                Assert(migrated.Brewing[0].AnimationStyle == MediaCatalog.BrewingAnimation && migrated.BrewingAnimationVersion == 1, "old start animation upgrades from toast to pouring");
+                Assert(migrated.Brewing[1].AnimationStyle == MediaCatalog.CustomAnimation && migrated.Brewing[1].AnimationFile == "keep.gif"
+                    && migrated.Brewing[1].VoiceFile == "keep.wav" && migrated.Brewing[2].AnimationStyle == 1 && !migrated.Brewing[2].Enabled, "upgrade preserves imports, other choices and switches");
+                Assert(migrated.Reminders[0].AnimationStyle == 1 && migrated.Greetings[0].AnimationStyle == 1 && migrated.Selected == 1
+                    && migrated.Times[1] == 69 && migrated.RoundIncrements[1] == 7 && !migrated.Sound, "upgrade preserves other scenes and tea settings");
+                Assert(migrated.Save(oldInteractionPath) && Preferences.Load(oldInteractionPath).Brewing[0].AnimationStyle == MediaCatalog.BrewingAnimation, "pouring selection survives reopening");
+                migrated.Brewing[0].AnimationStyle = 0;
+                Assert(migrated.Save(oldInteractionPath) && Preferences.Load(oldInteractionPath).Brewing[0].AnimationStyle == 0, "explicit toast selection remains available after upgrade");
                 using (ReminderSpeech speech = new ReminderSpeech()) Assert(speech.IsLoaded, "embedded local TTS WAV loads for playback");
                 for (int role = 0; role < MascotCatalog.Names.Length; role++)
                 {
+                    Assert(MediaCatalog.AnimationResource(role, MediaCatalog.DefaultProfile(2).AnimationStyle)
+                        != MediaCatalog.AnimationResource(role, MediaCatalog.DefaultProfile(0).AnimationStyle), "start and completion use separate animations");
+                    using (ReminderClip brewing = new ReminderClip(role, MediaCatalog.BrewingAnimation))
+                    {
+                        Assert(brewing.FrameCount >= 20 && brewing.DurationMilliseconds >= 2000 && brewing.DurationMilliseconds <= 3000, "each character has a dedicated pouring clip");
+                        brewing.SelectFrame(brewing.FrameCount / 2);
+                        using (Bitmap frame = new Bitmap(brewing.Image)) frame.Save(Path.Combine(directory, "brewing-middle-" + role + ".png"));
+                    }
                     using (ReminderClip extra = new ReminderClip(role, 1))
                         Assert(extra.FrameCount >= 20 && extra.DurationMilliseconds >= 2000 && extra.DurationMilliseconds <= 3000, "each character has an additional local animation");
                     using (ReminderClip clip = new ReminderClip(role))
@@ -593,7 +632,7 @@ namespace TeaTimer
                     editor.Close();
                 }
                 RunInteractionTests(directory);
-                File.WriteAllText(report, "PASS: timer, round increments, legacy settings, six animations, six voices, startup once, tea-picker click greeting before selection, picker cancellation, no replay or cutoff on selection, disabled picker, start/repeat interactions, pause/resume without replay, completion reminder, hidden/static characters, animation cleanup, scene and role switches, isolated scene edits, scene persistence, GIF/WAV import, managed copies, original-file removal, invalid-file rejection, missing/corrupt-file fallback, scene defaults, DPI layouts and renders.");
+                File.WriteAllText(report, "PASS: timer, round increments, legacy settings, brewing animation migration and custom-choice preservation, nine animations, six voices, startup once, tea-picker click greeting before selection, picker cancellation, no replay or cutoff on selection, disabled picker, dedicated pouring for start/repeat, pause/resume without replay, completion reminder, hidden/static characters, animation cleanup, scene and role switches, isolated scene edits, scene persistence, GIF/WAV import, managed copies, original-file removal, invalid-file rejection, missing/corrupt-file fallback, scene defaults, DPI layouts and renders.");
             }
             catch (Exception e) { File.WriteAllText(report, "FAIL: " + e); Environment.ExitCode = 1; }
         }

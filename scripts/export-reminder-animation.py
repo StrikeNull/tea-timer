@@ -10,11 +10,11 @@ from PIL import Image, ImageDraw, ImageFilter
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument("role", choices=["maid", "gpt", "dragon"])
-parser.add_argument("--variant", choices=["ready", "extra"], default="ready")
+parser.add_argument("--variant", choices=["ready", "extra", "brewing"], default="ready")
 parser.add_argument("--server", default="http://127.0.0.1:8189")
 parser.add_argument("--output-dir", type=Path, default=Path(r"G:\Comfy-Desktop\ComfyUI-Shared\output"))
 args = parser.parse_args()
-key = args.role if args.variant == "ready" else "extra-" + args.role
+key = args.role if args.variant == "ready" else args.variant + "-" + args.role
 job = json.loads((ROOT / "verification-media" / ("job-" + key + ".json")).read_text())
 with request.urlopen(args.server + "/history/" + job["prompt_id"], timeout=20) as response:
     history = json.load(response)
@@ -40,6 +40,19 @@ for index in indices:
     # Enclosed gaps between hair, wings and the body also contain green screen.
     strong_green = (pixels[:, :, 1] > 160) & (pixels[:, :, 1] > np.maximum(pixels[:, :, 0], pixels[:, :, 2]) + 90)
     background |= strong_green
+    if args.variant == 'brewing':
+        # Atlas cells can contain a tiny tip from an adjacent pose. Keep the
+        # main character's extent, including detached steam within that extent.
+        foreground = ~background
+        ys, xs = np.nonzero(foreground)
+        seed = np.argmin((xs - image.width / 2) ** 2 + (ys - image.height / 2) ** 2)
+        connected = Image.fromarray((foreground * 255).astype(np.uint8)).copy()
+        ImageDraw.floodfill(connected, (int(xs[seed]), int(ys[seed])), 128)
+        main = Image.fromarray(((np.array(connected) == 128) * 255).astype(np.uint8))
+        left, top, right, bottom = main.getbbox()
+        extent = np.zeros_like(foreground)
+        extent[max(0, top - 3):bottom + 3, max(0, left - 3):right + 3] = True
+        background |= ~extent
     if background.mean() < .25:
         raise SystemExit("Chroma background was not preserved; inspect generated frames before exporting.")
     edge = np.array(Image.fromarray((background * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(3))) > 0

@@ -95,7 +95,7 @@ namespace TeaTimer
         {
             StopVoice(); loading = true;
             int role = rolePicker.SelectedIndex; ReminderProfile profile = Current;
-            animationPicker.Items.Clear(); animationPicker.Items.AddRange(new object[] { "举杯提醒", MediaCatalog.ExtraActions[role], "随机播放", "自定义 GIF" });
+            animationPicker.Items.Clear(); animationPicker.Items.AddRange(new object[] { "举杯提醒", MediaCatalog.ExtraActions[role], "随机（举杯 / 问候）", "自定义 GIF", "开始泡茶（倒水）" });
             voicePicker.Items.Clear(); voicePicker.Items.AddRange(MediaCatalog.VoiceNames);
             animationPicker.SelectedIndex = profile.AnimationStyle; voicePicker.SelectedIndex = profile.VoiceStyle;
             enabled.Visible = scenePicker.SelectedIndex != 0; enabled.Checked = profile.Enabled;

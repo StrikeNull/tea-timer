@@ -22,7 +22,7 @@ namespace TeaTimer
 
     internal static class MediaCatalog
     {
-        internal const int CustomAnimation = 3, CustomVoice = 5;
+        internal const int CustomAnimation = 3, BrewingAnimation = 4, CustomVoice = 5;
         internal static readonly string[] ExtraActions = { "空手问候", "空手问候", "空手问候" };
         internal static readonly string[] SceneNames = { "到时提醒", "启动 / 点击选茶", "开始 / 再泡一杯" };
         internal static readonly string[] VoiceNames = { "清甜出汤", "活泼女仆", "温柔茶香", "俏皮催茶", "随机出汤语音", "自定义 WAV", "今天喝什么茶", "开始泡茶" };
@@ -31,7 +31,8 @@ namespace TeaTimer
         {
             role = Math.Max(0, Math.Min(2, role));
             if (style == 2) style = random.Next(2);
-            string[] names = style == 1 ? new[] { "TeaTimer.ExtraMaid", "TeaTimer.ExtraGpt", "TeaTimer.ExtraDragon" }
+            string[] names = style == BrewingAnimation ? new[] { "TeaTimer.BrewingMaid", "TeaTimer.BrewingGpt", "TeaTimer.BrewingDragon" }
+                : style == 1 ? new[] { "TeaTimer.ExtraMaid", "TeaTimer.ExtraGpt", "TeaTimer.ExtraDragon" }
                 : new[] { "TeaTimer.ReadyMaid", "TeaTimer.ReadyGpt", "TeaTimer.ReadyDragon" };
             return names[role];
         }
@@ -43,14 +44,14 @@ namespace TeaTimer
             return names[Math.Max(0, Math.Min(7, style))];
         }
         internal static ReminderProfile DefaultProfile(int scene)
-        { return new ReminderProfile { AnimationStyle = scene == 1 ? 1 : 0, VoiceStyle = scene == 1 ? 6 : scene == 2 ? 7 : 0 }; }
+        { return new ReminderProfile { AnimationStyle = scene == 1 ? 1 : scene == 2 ? BrewingAnimation : 0, VoiceStyle = scene == 1 ? 6 : scene == 2 ? 7 : 0 }; }
         internal static ReminderProfile[] CopyProfiles(ReminderProfile[] profiles, int scene = 0)
         {
             ReminderProfile[] result = new ReminderProfile[3];
             for (int i = 0; i < result.Length; i++)
             {
                 result[i] = profiles != null && i < profiles.Length && profiles[i] != null ? profiles[i].Copy() : DefaultProfile(scene);
-                result[i].AnimationStyle = Math.Max(0, Math.Min(CustomAnimation, result[i].AnimationStyle));
+                result[i].AnimationStyle = Math.Max(0, Math.Min(BrewingAnimation, result[i].AnimationStyle));
                 result[i].VoiceStyle = Math.Max(0, Math.Min(7, result[i].VoiceStyle));
             }
             return result;
