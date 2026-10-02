@@ -41,6 +41,8 @@
 编译脚本使用 Windows .NET Framework 自带的 C# 编译器，输出 `一盏茶.exe`。
 源码为 `TeaTimer.cs`、`CompactUi.cs`，图像资源位于 `assets/`。
 
+如果系统禁用 PowerShell 脚本，双击 `build.cmd` 也能编译，输出 `TeaTimer.exe`，无需修改系统执行策略。
+
 ## 验证
 
 ```powershell
