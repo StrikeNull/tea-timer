@@ -1,0 +1,59 @@
+{
+  "source": "Local ComfyUI MiniMax H3",
+  "comfyuiVersion": "0.38.2",
+  "gpu": "AMD Radeon RX 7900 XTX",
+  "model": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+  "textEncoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+  "vae": "minimax_h3_video_vae_fp16.safetensors",
+  "sampler": "res_multistep",
+  "scheduler": "simple",
+  "steps": 20,
+  "seed": 2026100302,
+  "sourceFps": 24,
+  "gifExport": "28 frames, transparent background, edge spill removal",
+  "generationSessions": "Existing local ComfyUI backend; cache released only when queue was idle.",
+  "workflows": "workflows/brewing-{role}.api.json",
+  "clips": [
+    {
+      "role": "maid",
+      "file": "brewing-maid.gif",
+      "promptId": "696232e9-593d-4bf5-811e-72a20e181dea",
+      "sourceFrames": 56,
+      "gifFrames": 28,
+      "durationMilliseconds": 2330,
+      "width": 384,
+      "height": 384,
+      "sourceAtlas": "tea-maid.png",
+      "sourceAtlasSha256": "3ea44d440907aa37d987887c7e289b39b77247abbf5191cbd0d867fba2ead4ed",
+      "sha256": "7e02547dd1bb1a1224f186acf8642b78b3d268f764288f4d0c4390c921621851"
+    },
+    {
+      "role": "gpt",
+      "file": "brewing-gpt.gif",
+      "promptId": "f0a4f3b0-aa23-4311-ab4a-a2c326d0e499",
+      "sourceFrames": 56,
+      "gifFrames": 28,
+      "durationMilliseconds": 2330,
+      "width": 384,
+      "height": 384,
+      "sourceAtlas": "gpt-maid.png",
+      "sourceAtlasSha256": "9edd0ba3f79602d993ec68f58149b9849c31789c1e628f9ca91c47bd1183b391",
+      "sha256": "408f3f4393689d85b913bb20bd01e92e829c67da3f90be5b381d4501fa5e598c"
+    },
+    {
+      "role": "dragon",
+      "file": "brewing-dragon.gif",
+      "promptId": "60ed5ee7-b035-4b50-bf1e-195a949e035d",
+      "sourceFrames": 56,
+      "gifFrames": 28,
+      "durationMilliseconds": 2330,
+      "width": 384,
+      "height": 384,
+      "sourceAtlas": "gpt-dragon.png",
+      "sourceAtlasSha256": "2fd2f18946717c8cf302fb064681a2447e06d8824b213202f7e9fc666dd5e55e",
+      "sha256": "415c26d9dc62274b68d161143e11c3fac6635d2649461445a9a2fafa164bdb51"
+    }
+  ],
+  "action": "Begin brewing: hold one teapot and one cup, pour continuously, blink, keep the pouring pose.",
+  "sourcePose": "Middle cell (index 1) of existing three-pose character atlases"
+}
