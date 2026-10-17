@@ -9,3 +9,6 @@ bin/
 obj/
 __pycache__/
 *.pyc
+/models/
+/comfyui-shared/
+/.venv/

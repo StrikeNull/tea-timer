@@ -103,7 +103,7 @@ Get-Content '.\verification\test-results.txt'
 「今天喝什么茶」与「开始泡茶」也使用同一本地 GPU 环境和 Serena 声线生成，记录见 `assets/interaction-voice-generation.json`。三段倒茶动画使用原角色图的中间泡茶姿势作为首帧，记录见 `assets/brewing-animation-generation.json`，工作流位于 `workflows/brewing-*.api.json`。
 六段内置语音已按感知响度统一到 -20 LUFS，保持各句语气，真峰值低于 -1 dB；测量与增益记录见 `assets/audio-levels.json`。校准直接写入音频文件，程序运行无需音频处理库。自定义导入语音保留文件本身的音量。
 
-复现时先启动本地 ComfyUI，并保证工作流中的模型名称已安装；脚本默认服务地址为 `http://127.0.0.1:8189`，输入与输出目录为当前电脑的 ComfyUI 共享目录，可通过参数更改。本机使用默认动态显存管理，无需修改 ComfyUI 安装文件。
+复现时先启动本地 ComfyUI，并保证工作流中的模型名称已安装；脚本默认服务地址为 `http://127.0.0.1:8189`，输入与输出目录默认为项目内的 `comfyui-shared/input` 和 `comfyui-shared/output`，请通过 `--input-dir`、`--output-dir` 指定实际共享目录。语音模型默认放在 `models/qwen3-tts-1.7b-customvoice`，也可使用 `--model` 指定目录；请在已安装 Qwen TTS 依赖的 Python 环境中运行。模型、虚拟环境与共享素材目录均不提交到 Git。
 
 ```powershell
 python scripts/generate-reminder-animation.py maid
